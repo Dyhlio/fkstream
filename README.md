@@ -16,6 +16,14 @@
 
 > **Hébergé par Fankai** : Une instance est disponible à l'adresse https://streamio.fankai.fr/configure
 
+## ⚠️ Avis de non-responsabilité légal
+
+**FKStream** est fourni à des fins éducatives et de recherche uniquement. Cet addon ne stocke, n'héberge ni ne distribue aucun contenu protégé par des droits d'auteur. L'addon agit comme un intermédiaire technique permettant de localiser et d'organiser des liens vers du contenu disponible publiquement sur Internet.
+
+Les utilisateurs sont entièrement responsables de l'usage qu'ils font de cet addon et doivent s'assurer que leur utilisation est conforme aux lois sur le droit d'auteur et les droits de propriété intellectuelle applicables dans leur juridiction. Nous recommandons fortement de n'utiliser cet addon que pour accéder à du contenu dans le domaine public ou pour lequel vous disposez des droits légaux d'accès.
+
+Les développeurs de **FKStream** n'encouragent pas et ne sont pas responsables de toute utilisation illégale de cet addon. En utilisant **FKStream**, vous acceptez d'en assumer l'entière responsabilité légale.
+
 ## ✨ Fonctionnalités
 
 - **Catalogue Fankai Complet** : Accès à l'ensemble des animes disponibles sur Fankai.
