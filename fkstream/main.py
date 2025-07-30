@@ -58,6 +58,15 @@ async def lifespan(app: FastAPI):
     await setup_database()
     
     try:
+        # Validation des URLs requises
+        if not settings.FANKAI_URL:
+            logger.error("ERREUR : FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
+            raise RuntimeError("FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
+        
+        if not settings.DATASET_URL:
+            logger.error("ERREUR : DATASET_URL est obligatoire. Consultez le README pour plus d'informations.")
+            raise RuntimeError("DATASET_URL est obligatoire. Consultez le README pour plus d'informations.")
+        
         # Initialisation du client HTTP
         app.state.http_client = HttpClient()
         logger.info("Client HTTP initialisé avec succès")
@@ -77,7 +86,7 @@ async def lifespan(app: FastAPI):
         # Tâche de mise à jour périodique du dataset en arrière-plan
         async def periodic_update_dataset():
             while True:
-                dataset_url = "https://raw.githubusercontent.com/Dydhzo/fkstream/refs/heads/main/dataset.json"
+                dataset_url = settings.DATASET_URL
                 logger.info(f"Lancement de la mise à jour périodique du dataset depuis : {dataset_url}")
                 try:
                     response = await app.state.http_client.get(dataset_url)
