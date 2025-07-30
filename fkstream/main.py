@@ -5,7 +5,6 @@ import uvicorn
 import os
 import asyncio
 import orjson
-import re
 from contextlib import asynccontextmanager, contextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
