@@ -4,6 +4,7 @@ from fkstream.utils.http_client import HttpClient
 from fkstream.utils.database import get_metadata_from_cache, set_metadata_to_cache, DistributedLock, LockAcquisitionError
 from fkstream.utils.common_logger import logger
 from fkstream.utils.base_client import BaseClient
+from fkstream.utils.models import settings
 
 
 async def _fetch_complete_anime_data(fankai_api: "FankaiAPI", anime_id: str) -> dict:
@@ -29,7 +30,9 @@ class FankaiAPI(BaseClient):
     
     def __init__(self, client: HttpClient):
         super().__init__()
-        self.base_url = "https://metadata.fankai.fr"
+        if not settings.FANKAI_URL:
+            raise ValueError("FANKAI_URL doit être définie dans les variables d'environnement. Consultez le README pour plus d'informations.")
+        self.base_url = settings.FANKAI_URL
         self.client = client
 
     async def get_all_series(self) -> List[Dict[str, Any]]:
