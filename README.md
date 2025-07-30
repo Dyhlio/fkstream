@@ -18,9 +18,9 @@
 
 ## ⚠️ Avis de non-responsabilité légal
 
-**FKStream** est fourni à des fins éducatives et de recherche uniquement. Cet addon ne stocke, n'héberge ni ne distribue aucun contenu protégé par des droits d'auteur. L'addon agit comme un intermédiaire technique permettant de localiser et d'organiser des liens vers du contenu disponible publiquement sur Internet.
+**FKStream** est fourni à des fins éducatives et de recherche uniquement. Cet addon ne stocke, n'héberge ni ne distribue aucun contenu. L'addon agit comme un simple intermédiaire technique.
 
-Les utilisateurs sont entièrement responsables de l'usage qu'ils font de cet addon et doivent s'assurer que leur utilisation est conforme aux lois sur le droit d'auteur et les droits de propriété intellectuelle applicables dans leur juridiction. Nous recommandons fortement de n'utiliser cet addon que pour accéder à du contenu dans le domaine public ou pour lequel vous disposez des droits légaux d'accès.
+Les utilisateurs sont entièrement responsables de l'usage qu'ils font de cet addon et doivent s'assurer que leur utilisation est conforme aux lois applicables dans leur juridiction. Nous recommandons fortement de n'utiliser cet addon que pour accéder à du contenu légal ou pour lequel vous disposez des droits d'accès.
 
 Les développeurs de **FKStream** n'encouragent pas et ne sont pas responsables de toute utilisation illégale de cet addon. En utilisant **FKStream**, vous acceptez d'en assumer l'entière responsabilité légale.
 
@@ -77,6 +77,16 @@ Idéal pour un hébergement sur un serveur ou un NAS.
 
 ## ⚙️ Configuration
 
+### Configuration requise
+
+Avant de lancer l'addon, vous devez définir deux URLs obligatoires dans votre fichier `.env` :
+- `FANKAI_URL` : URL de l'API pour les métadonnées
+- `DATASET_URL` : URL du dataset contenant les sources
+
+**Pour plus d'informations, rejoignez notre serveur Discord : https://discord.gg/B5BmaptXtz**
+
+### Interface de configuration
+
 Une fois l'addon lancé (avec l'une des deux méthodes), ouvrez votre navigateur et allez à l'adresse suivante :
 
 **`http://<adresse-ip-de-votre-machine>:8000/configure`**
@@ -116,6 +126,8 @@ Toutes les configurations avancées se font via le fichier `.env`.
 | `PROXY_DEBRID_STREAM_DEBRID_DEFAULT_APIKEY`  | (Requis si `PROXY_DEBRID_STREAM=True`) Votre clé API debrid.                           | `CHANGE_ME`                          |
 | `CUSTOM_HEADER_HTML`                         | (Optionnel) Code HTML à injecter dans l'en-tête de la page de configuration.         | ` ` (vide)                           |
 | `STREMTHRU_URL`                              | (Optionnel) URL du service StremThru.                                                | `https://stremthru.13377001.xyz`     |
+| `FANKAI_URL`                                 | **(OBLIGATOIRE)** URL de l'API Fankai - Voir section Configuration requise           | ` ` (vide)                           |
+| `DATASET_URL`                                | **(OBLIGATOIRE)** URL du dataset - Voir section Configuration requise                 | ` ` (vide)                           |
 | `LOG_LEVEL`                                  | (Optionnel) Niveau de log. Options : `DEBUG`, `PRODUCTION`.                          | `DEBUG`                              |
 
 ## 🙏 Remerciements
