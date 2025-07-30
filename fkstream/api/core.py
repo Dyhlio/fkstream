@@ -412,7 +412,7 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
         episodes = season.get('episodes', [])
         for episode in episodes:
             final_season_number = episode.get('season_number', season_number)
-            thumbnail_url = f"https://metadata.fankai.fr/episodes/{episode.get('id')}/image"
+            thumbnail_url = f"{settings.FANKAI_URL}/episodes/{episode.get('id')}/image" if settings.FANKAI_URL else None
             aired_date = episode.get('aired', '2024-01-01')
             videos.append({
                 "id": f"fk:{anime_id}:{episode.get('id')}",
