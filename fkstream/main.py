@@ -24,77 +24,6 @@ from fkstream.utils.common_logger import logger
 from fkstream.utils.models import settings
 
 
-def is_txt_format(content: bytes) -> bool:
-    """Détecte si le contenu est au format TXT."""
-    try:
-        # Essaie de décoder en UTF-8
-        text_content = content.decode('utf-8').strip()
-        
-        # Si c'est déjà du JSON valide, c'est pas du TXT
-        try:
-            orjson.loads(content)
-            return False  # C'est du JSON
-        except:
-            pass
-        
-        # Vérifie si ça ressemble à du TXT (contient des lignes de texte)
-        if text_content and '\n' in text_content:
-            return True
-            
-        return False
-    except:
-        return False
-
-
-def convert_txt_to_json(content: bytes) -> dict:
-    """Convertit un fichier TXT en format JSON pour le dataset."""
-    try:
-        text_content = content.decode('utf-8').strip()
-        lines = [line.strip() for line in text_content.split('\n') if line.strip()]
-        
-        dataset = {"top": []}
-        
-        for i, line in enumerate(lines):
-            # Format simple : chaque ligne = un anime
-            # Format attendu : "Nom de l'anime|magnet:?xt=..."
-            if '|' in line:
-                parts = line.split('|', 1)
-                anime_name = parts[0].strip()
-                magnet_link = parts[1].strip()
-                
-                anime_entry = {
-                    "name": anime_name,
-                    "id": f"txt_{i}",
-                    "api_id": f"txt_{i}",
-                    "sources": [
-                        {
-                            "type": "pack",
-                            "magnet": magnet_link,
-                            "files": [f"{anime_name} - Episode {{:02d}}.mkv".format(j) for j in range(1, 13)]
-                        }
-                    ]
-                }
-                dataset["top"].append(anime_entry)
-            else:
-                # Format simple : juste le nom de l'anime (sans magnet)
-                anime_name = line.strip()
-                if anime_name:
-                    anime_entry = {
-                        "name": anime_name,
-                        "id": f"txt_{i}",
-                        "api_id": f"txt_{i}",
-                        "sources": []
-                    }
-                    dataset["top"].append(anime_entry)
-        
-        logger.log("FKSTREAM", f"Conversion TXT → JSON réussie : {len(dataset['top'])} animes convertis")
-        return dataset
-        
-    except Exception as e:
-        logger.error(f"Erreur lors de la conversion TXT → JSON : {e}")
-        return {"top": []}
-
-
 class LoguruMiddleware(BaseHTTPMiddleware):
     """
     Middleware pour enregistrer les requêtes HTTP avec Loguru.
@@ -162,17 +91,8 @@ async def lifespan(app: FastAPI):
                 try:
                     response = await app.state.http_client.get(dataset_url)
                     response.raise_for_status()
-                    
-                    # Détection automatique du format et conversion si nécessaire
-                    content = response.content
-                    if is_txt_format(content):
-                        logger.info("Format TXT détecté, conversion en JSON en cours...")
-                        remote_dataset = convert_txt_to_json(content)
-                    else:
-                        logger.info("Format JSON détecté, chargement direct...")
-                        remote_dataset = orjson.loads(content)
-                    
-                    # Écriture du dataset distant dans le fichier local (toujours en JSON)
+                    remote_dataset = orjson.loads(response.content)
+                    # Écriture du dataset distant dans le fichier local
                     with open('/data/dataset.json', 'wb') as f:
                         f.write(orjson.dumps(remote_dataset, option=orjson.OPT_INDENT_2))
                     app.state.dataset = remote_dataset
