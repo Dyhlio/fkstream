@@ -31,9 +31,17 @@ class AppSettings(BaseSettings):
     PROXY_DEBRID_STREAM_PASSWORD: Optional[str] = None
     STREMTHRU_URL: Optional[str] = "https://stremthru.13377001.xyz"
     LOG_LEVEL: Optional[str] = "DEBUG"
+    FANKAI_URL: Optional[str] = None
+    DATASET_URL: Optional[str] = None
 
     @field_validator("STREMTHRU_URL")
     def remove_trailing_slash(cls, v):
+        if v and v.endswith("/"):
+            return v[:-1]
+        return v
+    
+    @field_validator("FANKAI_URL")
+    def remove_trailing_slash_fankai(cls, v):
         if v and v.endswith("/"):
             return v[:-1]
         return v
