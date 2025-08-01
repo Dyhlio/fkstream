@@ -16,6 +16,12 @@
 
 > **Hébergé par Fankai** : Une instance est disponible à l'adresse https://streamio.fankai.fr/configure
 
+## 🚨 Note importante sur les versions
+
+Les anciennes versions de FKStream ne sont plus maintenues. Merci de ne plus les utiliser car il n'y aura aucun support sur les anciennes versions !
+
+Nous vous recommandons vivement d'utiliser uniquement la dernière version qui inclut d'importantes améliorations de sécurité et de fonctionnalités.
+
 ## ⚠️ Avis de non-responsabilité légal
 
 **FKStream** est fourni à des fins éducatives et de recherche uniquement. Cet addon ne stocke, n'héberge ni ne distribue aucun contenu. L'addon agit comme un simple intermédiaire technique.
@@ -79,11 +85,11 @@ Idéal pour un hébergement sur un serveur ou un NAS.
 
 ### Configuration requise
 
-Avant de lancer l'addon, vous devez définir deux URLs obligatoires dans votre fichier `.env` :
-- `FANKAI_URL` : URL de l'API pour les métadonnées
-- `DATASET_URL` : URL du dataset contenant les sources
+Avant de lancer l'addon, vous devez définir les paramètres obligatoires dans votre fichier `.env` :
+- `FANKAI_URL` : URL de l'API pour les métadonnées et les sources
+- `API_KEY` : Clé API pour accéder au contenu
 
-**Pour plus d'informations, rejoignez notre serveur Discord : https://discord.gg/B5BmaptXtz**
+**Pour plus d'informations, rejoignez ce serveur Discord : https://discord.gg/B5BmaptXtz**
 
 ### Interface de configuration
 
@@ -127,7 +133,7 @@ Toutes les configurations avancées se font via le fichier `.env`.
 | `CUSTOM_HEADER_HTML`                         | (Optionnel) Code HTML à injecter dans l'en-tête de la page de configuration.         | ` ` (vide)                           |
 | `STREMTHRU_URL`                              | (Optionnel) URL du service StremThru.                                                | `https://stremthru.13377001.xyz`     |
 | `FANKAI_URL`                                 | **(OBLIGATOIRE)** URL de l'API Fankai - Voir section Configuration requise           | ` ` (vide)                           |
-| `DATASET_URL`                                | **(OBLIGATOIRE)** URL du dataset - Voir section Configuration requise                 | ` ` (vide)                           |
+| `API_KEY`                                    | **(OBLIGATOIRE)** Clé API pour accéder au contenu - Voir section Configuration requise | ` ` (vide)                           |
 | `LOG_LEVEL`                                  | (Optionnel) Niveau de log. Options : `DEBUG`, `PRODUCTION`.                          | `DEBUG`                              |
 
 ## 🙏 Remerciements
