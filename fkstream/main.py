@@ -52,9 +52,8 @@ class LoguruMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     """
     Gère le cycle de vie de l'application FastAPI.
-    Initialise les ressources et charge le dataset local au démarrage.
+    Initialise les ressources et charge le dataset depuis l'API au démarrage.
     """
-    update_task = None
     await setup_database()
     
     try:
@@ -63,47 +62,28 @@ async def lifespan(app: FastAPI):
             logger.error("ERREUR : FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
             raise RuntimeError("FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
         
-        if not settings.DATASET_URL:
-            logger.error("ERREUR : DATASET_URL est obligatoire. Consultez le README pour plus d'informations.")
-            raise RuntimeError("DATASET_URL est obligatoire. Consultez le README pour plus d'informations.")
+        if not settings.API_KEY:
+            logger.error("ERREUR : API_KEY est obligatoire. Consultez le README pour plus d'informations.")
+            raise RuntimeError("API_KEY est obligatoire. Consultez le README pour plus d'informations.")
         
         # Initialisation du client HTTP
         app.state.http_client = HttpClient()
         logger.info("Client HTTP initialisé avec succès")
 
-        # Chargement du dataset local
+        # Récupération du dataset depuis l'API avec API_KEY
         try:
-            with open('/data/dataset.json', 'rb') as f:
-                app.state.dataset = orjson.loads(f.read())
-            logger.log("FKSTREAM", "Dataset local chargé avec succès.")
-        except FileNotFoundError:
-            logger.warning("Le fichier 'dataset.json' est introuvable. L'addon ne pourra pas fournir de liens de streaming. Tentative de téléchargement.")
-            app.state.dataset = {"top": []}
+            response = await app.state.http_client.get(
+                settings.FANKAI_URL,
+                headers={"X-API-Key": settings.API_KEY}
+            )
+            response.raise_for_status()
+            app.state.dataset = orjson.loads(response.content)
+            logger.log("FKSTREAM", "Dataset chargé avec succès depuis l'API.")
         except Exception as e:
-            logger.warning(f"Impossible de charger le dataset local: {e}")
+            logger.error(f"Impossible de charger le dataset depuis l'API: {e}")
             app.state.dataset = {"top": []}
+            raise RuntimeError(f"Échec du chargement du dataset: {e}")
 
-        # Tâche de mise à jour périodique du dataset en arrière-plan
-        async def periodic_update_dataset():
-            while True:
-                dataset_url = settings.DATASET_URL
-                logger.info(f"Lancement de la mise à jour périodique du dataset depuis : {dataset_url}")
-                try:
-                    response = await app.state.http_client.get(dataset_url)
-                    response.raise_for_status()
-                    remote_dataset = orjson.loads(response.content)
-                    # Écriture du dataset distant dans le fichier local
-                    with open('/data/dataset.json', 'wb') as f:
-                        f.write(orjson.dumps(remote_dataset, option=orjson.OPT_INDENT_2))
-                    app.state.dataset = remote_dataset
-                    logger.log("FKSTREAM", "Dataset distant chargé et local mis à jour avec succès.")
-                except Exception as e:
-                    logger.warning(f"Échec de la mise à jour du dataset distant: {e}")
-                
-                logger.info("Prochaine mise à jour du dataset dans 1 heure.")
-                await asyncio.sleep(3600)  # 3600 secondes = 1 heure
-
-        update_task = asyncio.create_task(periodic_update_dataset())
 
     except Exception as e:
         logger.error(f"Échec de l'initialisation : {e}")
@@ -116,16 +96,10 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         # Nettoyage à l'arrêt de l'application
-        if update_task:
-            update_task.cancel()
         cleanup_task.cancel()
 
-        tasks_to_await = [cleanup_task]
-        if update_task:
-            tasks_to_await.append(update_task)
-
         try:
-            await asyncio.gather(*tasks_to_await, return_exceptions=True)
+            await asyncio.gather(cleanup_task, return_exceptions=True)
         except asyncio.CancelledError:
             pass
         
