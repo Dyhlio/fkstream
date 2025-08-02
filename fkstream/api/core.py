@@ -198,15 +198,6 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
 
     logger.info(f"🔍 CATALOG - Catalogue Fankai demandé, recherche: {search}, genre: {genre}, tri: {sort}")
 
-
-    # 1. Obtenir la liste des api_id autorisés depuis le dataset
-    dataset_animes = request.app.state.dataset.get('top', [])
-    available_api_ids = {str(anime.get('api_id')) for anime in dataset_animes}
-
-    if not available_api_ids:
-        logger.warning("Le dataset est vide ou ne contient aucun api_id. Le catalogue sera vide.")
-        return {"metas": []}
-
     animes_data = await get_metadata_from_cache("fk:list")
 
     if animes_data:
@@ -215,11 +206,6 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
         logger.debug("📦 CACHE MISS: fk:list - Recuperation depuis l'API")
         animes_data = await fankai_api.get_all_series()
         await set_metadata_to_cache("fk:list", animes_data)
-        
-        
-    # 2. Filtrer la liste d'animes (du cache ou de l'API) pour ne garder que ceux du dataset
-    animes_data = [anime for anime in animes_data if str(anime.get('id')) in available_api_ids]
-    logger.info(f"Filtrage par dataset : {len(animes_data)} animes valides à traiter.")
 
 
 
