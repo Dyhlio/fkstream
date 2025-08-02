@@ -19,6 +19,8 @@ class AppSettings(BaseSettings):
     DATABASE_TYPE: Optional[str] = "sqlite"
     DATABASE_URL: Optional[str] = "username:password@hostname:port"
     DATABASE_PATH: Optional[str] = "data/fkstream.db"
+    FANKAI_URL: Optional[str] = None
+    API_KEY: Optional[str] = None
     METADATA_TTL: Optional[int] = 86400  # 1 jour
     DEBRID_AVAILABILITY_TTL: Optional[int] = 86400  # 1 jour
     SCRAPE_LOCK_TTL: Optional[int] = 300  # 5 minutes
@@ -34,6 +36,12 @@ class AppSettings(BaseSettings):
 
     @field_validator("STREMTHRU_URL")
     def remove_trailing_slash(cls, v):
+        if v and v.endswith("/"):
+            return v[:-1]
+        return v
+    
+    @field_validator("FANKAI_URL")
+    def remove_trailing_slash_fankai(cls, v):
         if v and v.endswith("/"):
             return v[:-1]
         return v
