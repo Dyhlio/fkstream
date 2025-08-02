@@ -73,8 +73,8 @@ async def lifespan(app: FastAPI):
         # Récupération du dataset depuis l'API avec API_KEY
         try:
             response = await app.state.http_client.get(
-                settings.FANKAI_URL,
-                headers={"X-API-Key": settings.API_KEY}
+                f"{settings.FANKAI_URL}/dataset",
+                headers={"X-Dataset-API-Key": settings.API_KEY}
             )
             response.raise_for_status()
             app.state.dataset = orjson.loads(response.content)
