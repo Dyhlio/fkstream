@@ -91,7 +91,7 @@ async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAP
         "id": settings.ADDON_ID,
         "name": settings.ADDON_NAME,
         "description": "FKStream – Addon non officiel pour accéder au contenu de Fankai",
-        "version": "1.2.2",
+        "version": "1.2.3",
         "catalogs": [
             {
                 "type": "anime",
@@ -198,7 +198,6 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
 
     logger.info(f"🔍 CATALOG - Catalogue Fankai demandé, recherche: {search}, genre: {genre}, tri: {sort}")
 
-
     # 1. Obtenir la liste des api_id autorisés depuis le dataset
     dataset_animes = request.app.state.dataset.get('top', [])
     available_api_ids = {str(anime.get('api_id')) for anime in dataset_animes}
@@ -215,7 +214,6 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
         logger.debug("📦 CACHE MISS: fk:list - Recuperation depuis l'API")
         animes_data = await fankai_api.get_all_series()
         await set_metadata_to_cache("fk:list", animes_data)
-        
         
     # 2. Filtrer la liste d'animes (du cache ou de l'API) pour ne garder que ceux du dataset
     animes_data = [anime for anime in animes_data if str(anime.get('id')) in available_api_ids]
@@ -412,7 +410,7 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
         episodes = season.get('episodes', [])
         for episode in episodes:
             final_season_number = episode.get('season_number', season_number)
-            thumbnail_url = f"https://metadata.fankai.fr/episodes/{episode.get('id')}/image"
+            thumbnail_url = f"{settings.FANKAI_URL}/episodes/{episode.get('id')}/image" if settings.FANKAI_URL else None
             aired_date = episode.get('aired', '2024-01-01')
             videos.append({
                 "id": f"fk:{anime_id}:{episode.get('id')}",
