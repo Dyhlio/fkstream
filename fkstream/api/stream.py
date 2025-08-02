@@ -196,15 +196,18 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
                 }
                 
                 # Parce que les emojis, c'est cool
-                status = status_map.get(hash_val, 'unknown')
-                if status == "cached":
-                    debrid_emoji = "⚡"
-                elif status == "magnet":
+                if debrid_service == "torrent":
                     debrid_emoji = "🧲"
-                elif status in ["downloading", "queued"]:
-                    debrid_emoji = "⬇️"
                 else:
-                    debrid_emoji = "❓"
+                    status = status_map.get(hash_val, 'unknown')
+                    if status == "cached":
+                        debrid_emoji = "⚡"
+                    elif status == "magnet":
+                        debrid_emoji = "🧲"
+                    elif status in ["downloading", "queued"]:
+                        debrid_emoji = "⬇️"
+                    else:
+                        debrid_emoji = "❓"
                 
                 stream_item = _create_stream_item(request, b64config, debrid_service, debrid_emoji, torrent_data, media_id)
                 streams_list.append(stream_item)
