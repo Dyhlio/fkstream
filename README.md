@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Dydhzo/fkstream/refs/heads/main/fkstream/assets/fkstream-logo.jpg" alt="FKStream Logo" width="150">
+  <img src="https://raw.githubusercontent.com/Dyhlio/fkstream/refs/heads/main/fkstream/assets/fkstream-logo.jpg" alt="FKStream Logo" width="150">
   <h1>FKStream</h1>
   <p><strong>Addon Stremio non officiel pour accéder au contenu de Fankai.</strong></p>
   <p>
@@ -52,7 +52,7 @@ Idéal pour une utilisation sur votre machine personnelle.
 1.  **Prérequis** : Assurez-vous d'avoir [Python 3.11](https://www.python.org/downloads/) ou une version plus récente installé.
 2.  **Clonez le projet** :
     ```bash
-    git clone https://github.com/Dydhzo/fkstream.git
+    git clone https://github.com/Dyhlio/fkstream.git
     cd fkstream
     ```
 3.  **Créez un environnement virtuel et installez les dépendances** :
