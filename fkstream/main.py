@@ -22,6 +22,11 @@ from fkstream.utils.database import (
 from fkstream.utils.http_client import HttpClient
 from fkstream.utils.common_logger import logger
 from fkstream.utils.models import settings
+from fkstream.utils.custom_sources import (
+    download_custom_sources,
+    periodic_custom_source_update,
+    load_custom_sources_from_cache,
+)
 
 
 class LoguruMiddleware(BaseHTTPMiddleware):
@@ -84,6 +89,12 @@ async def lifespan(app: FastAPI):
             app.state.dataset = {"top": []}
             raise RuntimeError(f"Échec du chargement du dataset: {e}")
 
+        # Chargement des custom sources
+        if settings.CUSTOM_SOURCE_URL:
+            app.state.custom_sources = await download_custom_sources(app.state.http_client)
+        else:
+            app.state.custom_sources = load_custom_sources_from_cache()
+
 
     except Exception as e:
         logger.error(f"Échec de l'initialisation : {e}")
@@ -92,14 +103,27 @@ async def lifespan(app: FastAPI):
     # Tâche de nettoyage pour les verrous expirés
     cleanup_task = asyncio.create_task(cleanup_expired_locks())
 
+    # Tâche de mise à jour périodique des custom sources
+    custom_source_task = None
+    if settings.CUSTOM_SOURCE_URL:
+        custom_source_task = asyncio.create_task(
+            periodic_custom_source_update(app.state.http_client, app.state)
+        )
+
     try:
         yield
     finally:
         # Nettoyage à l'arrêt de l'application
         cleanup_task.cancel()
+        if custom_source_task:
+            custom_source_task.cancel()
+
+        tasks = [cleanup_task]
+        if custom_source_task:
+            tasks.append(custom_source_task)
 
         try:
-            await asyncio.gather(cleanup_task, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
         except asyncio.CancelledError:
             pass
         

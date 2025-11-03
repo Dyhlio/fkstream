@@ -6,7 +6,7 @@ import asyncio
 from fkstream.utils.common_logger import logger
 from fkstream.utils.models import database, settings
 
-DATABASE_VERSION = "1.1"
+DATABASE_VERSION = "1.2"
 
 
 async def setup_database():
@@ -59,6 +59,12 @@ async def setup_database():
         await database.execute("CREATE TABLE IF NOT EXISTS scrape_lock (lock_key TEXT PRIMARY KEY, instance_id TEXT, timestamp INTEGER, expires_at INTEGER)")
         await database.execute("CREATE TABLE IF NOT EXISTS metadata (media_id TEXT PRIMARY KEY, media_data TEXT, timestamp REAL NOT NULL, expires_at REAL)")
         await database.execute("CREATE TABLE IF NOT EXISTS debrid_availability (media_id TEXT NOT NULL, hash TEXT NOT NULL, debrid_service TEXT NOT NULL, status TEXT NOT NULL, timestamp REAL NOT NULL, expires_at REAL, PRIMARY KEY (media_id, hash, debrid_service))")
+        await database.execute("CREATE TABLE IF NOT EXISTS custom_source (page_url TEXT PRIMARY KEY, direct_url TEXT NOT NULL, timestamp REAL NOT NULL, expires_at REAL NOT NULL)")
+
+        if settings.DATABASE_TYPE == "sqlite":
+            await database.execute("CREATE INDEX IF NOT EXISTS idx_custom_source_expires ON custom_source(expires_at)")
+        else:
+            await database.execute("CREATE INDEX IF NOT EXISTS idx_custom_source_expires ON custom_source(expires_at)")
 
         if settings.DATABASE_TYPE == "sqlite":
             await database.execute("PRAGMA busy_timeout=30000")
@@ -72,6 +78,7 @@ async def setup_database():
         cleanup_tasks = [
             database.execute("DELETE FROM metadata WHERE expires_at IS NOT NULL AND expires_at < :current_time;", {"current_time": current_time}),
             database.execute("DELETE FROM debrid_availability WHERE expires_at IS NOT NULL AND expires_at < :current_time;", {"current_time": current_time}),
+            database.execute("DELETE FROM custom_source WHERE expires_at < :current_time;", {"current_time": current_time}),
         ]
         await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
@@ -133,6 +140,27 @@ async def save_debrid_to_cache(media_id: str, hash: str, debrid_service: str, st
     else:
         query = "INSERT INTO debrid_availability (media_id, hash, debrid_service, status, timestamp, expires_at) VALUES (:media_id, :hash, :debrid_service, :status, :timestamp, :expires_at) ON CONFLICT (media_id, hash, debrid_service) DO UPDATE SET status = :status, timestamp = :timestamp, expires_at = :expires_at"
     values = {"media_id": media_id, "hash": hash, "debrid_service": debrid_service, "status": status, "timestamp": current_time, "expires_at": expires_at}
+    await database.execute(query, values)
+
+
+async def get_custom_source_from_cache(page_url: str):
+    """Récupère l'URL directe depuis le cache."""
+    current_time = time.time()
+    query = "SELECT direct_url FROM custom_source WHERE page_url = :page_url AND expires_at > :current_time"
+    values = {"page_url": page_url, "current_time": current_time}
+    result = await database.fetch_one(query, values)
+    return result["direct_url"] if result else None
+
+
+async def save_custom_source_to_cache(page_url: str, direct_url: str):
+    """Sauvegarde l'URL directe dans le cache."""
+    current_time = time.time()
+    expires_at = current_time + settings.CUSTOM_SOURCE_TTL
+    if settings.DATABASE_TYPE == "sqlite":
+        query = "INSERT OR REPLACE INTO custom_source (page_url, direct_url, timestamp, expires_at) VALUES (:page_url, :direct_url, :timestamp, :expires_at)"
+    else:
+        query = "INSERT INTO custom_source (page_url, direct_url, timestamp, expires_at) VALUES (:page_url, :direct_url, :timestamp, :expires_at) ON CONFLICT (page_url) DO UPDATE SET direct_url = :direct_url, timestamp = :timestamp, expires_at = :expires_at"
+    values = {"page_url": page_url, "direct_url": direct_url, "timestamp": current_time, "expires_at": expires_at}
     await database.execute(query, values)
 
 

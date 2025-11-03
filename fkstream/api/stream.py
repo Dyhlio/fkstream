@@ -1,11 +1,13 @@
-# fkstream/api/stream.py
 import re
-from urllib.parse import quote
+import asyncio
+from urllib.parse import quote, parse_qs, urlparse
+import html
 
 from fastapi import APIRouter, Depends, Request
 
 from fkstream.debrid.manager import get_debrid_extension
 from fkstream.scrapers.fankai import FankaiAPI, get_or_fetch_anime_details
+from fkstream.scrapers.videas import scrape_videas_url
 from fkstream.utils.common_logger import logger
 from fkstream.utils.dependencies import get_fankai_api
 from fkstream.utils.general import b64_encode
@@ -22,6 +24,17 @@ from fkstream.debrid.manager import build_stremthru_token
 
 # --- Définition du routeur ---
 streams = APIRouter()
+
+
+def extract_trackers_from_magnet(magnet_uri: str) -> list:
+    try:
+        decoded_uri = html.unescape(magnet_uri)
+        parsed = urlparse(decoded_uri)
+        params = parse_qs(parsed.query)
+        return params.get("tr", [])
+    except Exception as e:
+        logger.error(f"Échec extraction trackers du magnet: {e}")
+        return []
 
 
 async def _parse_media_id(media_id: str):
@@ -80,7 +93,7 @@ async def _fetch_anime_and_episode_data(fankai_api: FankaiAPI, anime_id: str, ep
     logger.info(f"Episode selectionne: {selected_episode.name} (S{selected_episode.season_number}E{selected_episode.number})")
     return anime_info, selected_episode
 
-def _create_stream_item(request: Request, b64config: str, debrid_service: str, debrid_emoji: str, torrent: dict, media_id: str):
+def _create_stream_item(request: Request, b64config: str, debrid_service: str, debrid_emoji: str, torrent: dict, media_id: str, trackers: list = None):
     """Crée un dictionnaire représentant un flux (stream)."""
     file_title = torrent['title']
     hash_val = torrent['infoHash']
@@ -101,6 +114,8 @@ def _create_stream_item(request: Request, b64config: str, debrid_service: str, d
     if debrid_service == "torrent":
         stream_item["infoHash"] = hash_val
         stream_item["fileIdx"] = torrent.get('fileIndex')
+        if trackers:
+            stream_item["sources"] = trackers
     else:
         encoded_filename = quote(display_title, safe='')
         encoded_media_id = b64_encode(media_id)
@@ -145,11 +160,12 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
         info_hash_match = re.search(r'btih:([a-fA-F0-9]{40})', magnet)
         if magnet and info_hash_match:
             hash_val = info_hash_match.group(1).lower()
-            # Stocker le magnet complet avec trackers pour éviter l'utilisation du magnet de secours
+            trackers = extract_trackers_from_magnet(magnet)
             store_magnet_link(hash_val, magnet)
             all_torrents_info.append({
                 "source": source,
-                "hash": hash_val
+                "hash": hash_val,
+                "trackers": trackers
             })
             hashes_to_check.append(hash_val)
 
@@ -178,6 +194,7 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
     for torrent_info in all_torrents_info:
         source = torrent_info["source"]
         hash_val = torrent_info["hash"]
+        trackers = torrent_info.get("trackers", [])
         files_in_torrent = source.get('files', [])
 
         files_for_matching = [{"title": f} for f in files_in_torrent]
@@ -209,7 +226,7 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
                     else:
                         debrid_emoji = "❓"
                 
-                stream_item = _create_stream_item(request, b64config, debrid_service, debrid_emoji, torrent_data, media_id)
+                stream_item = _create_stream_item(request, b64config, debrid_service, debrid_emoji, torrent_data, media_id, trackers)
                 streams_list.append(stream_item)
 
 
@@ -219,6 +236,33 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
 
     if not streams_list:
         logger.warning(f"Aucun stream n'a pu être généré pour {media_id} depuis le dataset.")
+
+    custom_sources = request.app.state.custom_sources.get('animes', [])
+    custom_anime = next((a for a in custom_sources if str(a.get('api_id')) == anime_id), None)
+
+    if custom_anime:
+        custom_urls = []
+        for season in custom_anime.get('seasons', []):
+            if season.get('season_number') == selected_episode.season_number:
+                for episode in season.get('episodes', []):
+                    if episode.get('episode_number') == selected_episode.number:
+                        custom_urls.extend(episode.get('urls', []))
+
+        if custom_urls:
+            scrape_tasks = [scrape_videas_url(request.app.state.http_client, url) for url in custom_urls]
+            scraped_results = await asyncio.gather(*scrape_tasks, return_exceptions=True)
+
+            for direct_url in scraped_results:
+                if direct_url and not isinstance(direct_url, Exception):
+                    streams_list.append({
+                        "name": "[CUSTOM ⭐] FKStream",
+                        "description": f"{anime_info.name} S{selected_episode.season_number:02d}E{selected_episode.number:02d}",
+                        "url": direct_url
+                    })
+
+            added_count = sum(1 for url in scraped_results if url and not isinstance(url, Exception))
+            if added_count > 0:
+                logger.log("FKSTREAM", f"{added_count} custom source(s) ajoutée(s) pour {anime_info.name} S{selected_episode.season_number:02d}E{selected_episode.number:02d}")
 
     return {"streams": streams_list}
 

@@ -33,6 +33,10 @@ class AppSettings(BaseSettings):
     PROXY_DEBRID_STREAM_PASSWORD: Optional[str] = None
     STREMTHRU_URL: Optional[str] = "https://stremthru.13377001.xyz"
     LOG_LEVEL: Optional[str] = "DEBUG"
+    CUSTOM_SOURCE_URL: Optional[str] = None
+    CUSTOM_SOURCE_PATH: Optional[str] = "data/custom_sources.json"
+    CUSTOM_SOURCE_INTERVAL: Optional[int] = 3600
+    CUSTOM_SOURCE_TTL: Optional[int] = 3600
 
     @field_validator("STREMTHRU_URL")
     def remove_trailing_slash(cls, v):

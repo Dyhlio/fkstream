@@ -1,6 +1,6 @@
 services:
   fkstream:
-    image: dydhzo/fkstream:latest
+    image: dyhlio/fkstream:latest
     container_name: fkstream
     restart: unless-stopped
     ports:

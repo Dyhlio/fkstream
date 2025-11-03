@@ -30,7 +30,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          dydhzo/fkstream
+          dyhlio/fkstream
           ghcr.io/${{ github.repository }}
         tags: |
           type=raw,value=${{ steps.get-version.outputs.VERSION }},enable={{is_default_branch}}
