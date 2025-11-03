@@ -33,6 +33,7 @@ Les développeurs de **FKStream** n'encouragent pas et ne sont pas responsables 
 ## ✨ Fonctionnalités
 
 - **Catalogue Fankai Complet** : Accès à l'ensemble des animes disponibles sur Fankai.
+- **Sources Personnalisées** : Possibilité d'ajouter des sources externes via CUSTOM_SOURCE_URL.
 - **Intégration Debrid** : Supporte de nombreux services de débridage (Real-Debrid, AllDebrid, Premiumize, etc.) pour un streaming haute vitesse.
 - **Mode Torrent Direct** : Possibilité d'envoyer les torrents directement à Stremio sans passer par un service debrid.
 - **Mise en Cache Intelligente** : Cache les métadonnées et la disponibilité des liens pour des chargements plus rapides.
@@ -135,6 +136,10 @@ Toutes les configurations avancées se font via le fichier `.env`.
 | `FANKAI_URL`                                 | **(OBLIGATOIRE)** URL de l'API Fankai - Voir section Configuration requise           | ` ` (vide)                           |
 | `API_KEY`                                    | **(OBLIGATOIRE)** Clé API pour accéder au contenu - Voir section Configuration requise | ` ` (vide)                           |
 | `LOG_LEVEL`                                  | (Optionnel) Niveau de log. Options : `DEBUG`, `PRODUCTION`.                          | `DEBUG`                              |
+| `CUSTOM_SOURCE_URL`                          | (Optionnel) URL du fichier JSON contenant les sources personnalisées.                | ` ` (vide)                           |
+| `CUSTOM_SOURCE_PATH`                         | (Optionnel) Chemin du fichier JSON pour les sources personnalisées.                  | `data/custom_sources.json`           |
+| `CUSTOM_SOURCE_INTERVAL`                     | (Optionnel) Intervalle de mise à jour en secondes.                                   | `3600` (1 heure)                     |
+| `CUSTOM_SOURCE_TTL`                          | (Optionnel) Durée du cache pour les sources custom en secondes.                      | `3600` (1 heure)                     |
 
 ## 🙏 Remerciements
 
