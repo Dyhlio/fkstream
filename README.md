@@ -68,19 +68,36 @@ Idéal pour une utilisation sur votre machine personnelle.
     ```
 5.  L'addon est maintenant en cours d'exécution sur votre machine.
 
-### Méthode 2 : Déploiement avec Docker (Recommandé pour les serveurs)
+### Méthode 2 : Déploiement avec Docker (Recommandé)
 
-Idéal pour un hébergement sur un serveur ou un NAS.
+1. **Créer un fichier `docker-compose.yml`**:
 
-1.  **Prérequis** : Assurez-vous d'avoir [Docker](https://www.docker.com/products/docker-desktop/) et Docker Compose installés.
-2.  **Créez votre fichier de configuration** :
-    - Copiez le fichier `.env.example` et renommez-le en `.env`.
-    - Modifiez votre nouveau fichier `.env` pour y mettre vos propres paramètres.
-3.  **Lancez avec Docker Compose** :
-    ```bash
-    docker-compose up -d
-    ```
-4.  L'addon est maintenant en cours d'exécution dans un conteneur Docker.
+```yaml
+services:
+  fkstream:
+    image: dyhlio/fkstream:latest
+    container_name: fkstream
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - FANKAI_URL=https://example.com
+      - API_KEY=your_api_key_here
+      - DATABASE_TYPE=sqlite
+      - DATABASE_PATH=/data/fkstream.db
+    restart: unless-stopped
+```
+
+2. **Démarrer le conteneur**:
+```bash
+docker-compose up -d
+```
+
+3. **Vérifier les logs**:
+```bash
+docker-compose logs -f fkstream
+```
 
 ## ⚙️ Configuration
 
@@ -151,3 +168,4 @@ Toutes les configurations avancées se font via le fichier `.env`.
 ## 📜 Licence
 
 Le code original de ce projet par g0ldyy est distribué sous la Licence MIT. Les modifications et contributions ultérieures sont également soumises à cette licence. Voir le fichier `LICENSE` pour le texte complet.
+
