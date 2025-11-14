@@ -6,11 +6,12 @@
 Script interactif pour ajouter des URLs de streaming personnalisées au fichier `custom_sources.json`.
 
 ### Fonctionnalités
-- Vérification intelligente des doublons
+- **Deux modes d'ajout** : simple (1 épisode) ou batch (plusieurs épisodes)
+- Détection automatique des doublons (URLs, animes, saisons, épisodes)
 - Création automatique du fichier JSON si inexistant
-- Ajout uniquement des nouvelles URLs (évite les duplications)
 - Support de plusieurs URLs par épisode (séparées par des virgules)
-- Mise à jour automatique des animes/saisons/épisodes existants
+- Tri automatique par `api_id`, saisons et épisodes
+- **Mode batch sécurisé** : validation explicite avec 'f' pour envoyer
 
 ### Utilisation
 
@@ -32,23 +33,40 @@ chmod +x add_custom_source.sh
 1. **API ID de l'anime** - Entrer l'ID numérique de l'anime
 2. **ID de l'anime** - Slug de l'anime (ex: black-clover-kai)
 3. **Nom de l'anime** - Nom complet de l'anime
-4. **Numéro de saison** - Numéro de la saison (1, 2, 3...)
-5. **Numéro d'épisode** - Numéro de l'épisode (1, 2, 3...)
-6. **URLs** - Une ou plusieurs URLs séparées par des virgules
+4. **Mode d'ajout** - Choisir entre mode simple (1 épisode) ou batch (plusieurs épisodes)
 
-### Logique de vérification
+#### Mode simple (option 1)
+5. **Numéro de saison** - Numéro de la saison (1, 2, 3...)
+6. **Numéro d'épisode** - Numéro de l'épisode (1, 2, 3...)
+7. **URLs** - Une ou plusieurs URLs séparées par des virgules
 
-#### Si l'anime n'existe pas
-→ Crée un nouvel anime avec la saison et l'épisode
+#### Mode batch (option 2)
+5. **Saisie multiple** - Format: `sXeY=url1,url2,url3`
+   - Une ligne par épisode
+   - **Taper `f` puis ENTREE pour envoyer**
+   - Taper `q` puis ENTREE pour annuler
+   - Ligne vide = continue la saisie
 
-#### Si l'anime existe mais pas la saison
-→ Ajoute la nouvelle saison avec l'épisode
+**Exemples valides:**
+```
+> s1e1=https://site.com/video.mp4
+> s1e2=https://site.com/v2.mp4,https://mirror.com/v2.mp4
+> s2e5=https://autre.com/episode.mp4
+> f
+[SUCCESS] 3 episode(s) ajoute(s) avec 4 URL(s)
+```
 
-#### Si l'anime et la saison existent mais pas l'épisode
-→ Ajoute le nouvel épisode avec les URLs
+**Format:**
+- `sXeY` : X = numéro de saison, Y = numéro d'épisode (insensible à la casse)
+- `=` : Séparateur entre épisode et URLs
+- `url1,url2` : URLs séparées par des virgules
 
-#### Si tout existe déjà
-→ Ajoute uniquement les URLs qui ne sont pas déjà présentes (évite les doublons)
+### Logique automatique
+
+Le script gère intelligemment toutes les situations :
+- Crée automatiquement les animes, saisons ou épisodes manquants
+- N'ajoute que les URLs non présentes (pas de doublons)
+- Trie automatiquement par `api_id`, saisons et épisodes
 
 ### Structure du fichier custom_sources.json
 
@@ -80,5 +98,5 @@ chmod +x add_custom_source.sh
 
 ### Notes importantes
 
-- Le fichier JSON est automatiquement formaté avec indentation (2 espaces) pour une meilleure lisibilité
-- Le script gère automatiquement les doublons d'URLs au niveau de chaque épisode
+- Le fichier JSON est automatiquement formaté avec indentation (2 espaces)
+- Encodage UTF-8 pour les caractères spéciaux
