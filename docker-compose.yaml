@@ -10,5 +10,5 @@ services:
       - FANKAI_URL=https://example.com
       - API_KEY=your_api_key_here
       - DATABASE_TYPE=sqlite
-      - DATABASE_PATH=data/fkstream.db
+      - DATABASE_PATH=/data/fkstream.db
     restart: unless-stopped
