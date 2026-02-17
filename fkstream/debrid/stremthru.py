@@ -213,7 +213,7 @@ class StremThru:
                         logger.info(f"🔄 Nouveau statut apres tentative de telechargement: {new_status}")
                         if new_status == "downloading":
                             logger.info(f"✅ Telechargement demarre pour le hash {hash}")
-                            return f"https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4#message=Telechargement en cours pour {hash[:8]}..."
+                            return None
                         else:
                             logger.warning(f"❌ Telechargement non demarre, statut: {new_status}")
                             return None
