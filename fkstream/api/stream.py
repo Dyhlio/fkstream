@@ -114,8 +114,9 @@ def _create_stream_item(request: Request, b64config: str, debrid_service: str, d
     if debrid_service == "torrent":
         stream_item["infoHash"] = hash_val
         stream_item["fileIdx"] = torrent.get('fileIndex')
-        if trackers:
-            stream_item["sources"] = trackers
+        sources = [f"tracker:{tr}" for tr in trackers] if trackers else []
+        sources.append(f"dht:{hash_val}")
+        stream_item["sources"] = sources
     else:
         encoded_filename = quote(display_title, safe='')
         encoded_media_id = b64_encode(media_id)
