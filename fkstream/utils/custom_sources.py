@@ -21,8 +21,10 @@ async def download_custom_sources(http_client):
 
         Path(os.path.dirname(settings.CUSTOM_SOURCE_PATH)).mkdir(parents=True, exist_ok=True)
 
-        with open(settings.CUSTOM_SOURCE_PATH, 'wb') as f:
-            f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+        await asyncio.to_thread(
+            Path(settings.CUSTOM_SOURCE_PATH).write_bytes,
+            orjson.dumps(data, option=orjson.OPT_INDENT_2)
+        )
 
         anime_count = len(data.get('animes', []))
         logger.log("FKSTREAM", f"Custom sources téléchargées et sauvegardées: {anime_count} anime(s)")

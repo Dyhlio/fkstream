@@ -1,15 +1,19 @@
 import asyncio
-import re
+import time
 from urllib.parse import unquote
 
 from RTN import parse
-from fkstream.utils.models import settings
-from fkstream.utils.general import is_video, find_best_file_for_episode
-from fkstream.utils.database import get_debrid_from_cache, save_debrid_to_cache, get_metadata_from_cache, set_metadata_to_cache
+from fkstream.utils.models import settings, Episode
+from fkstream.utils.general import is_video
+from fkstream.utils.stream_utils import find_best_file_for_episode
+from fkstream.utils.database import get_debrid_from_cache, save_debrid_to_cache
 from fkstream.utils.common_logger import logger
 from fkstream.utils.magnet_store import get_magnet_link
 from fkstream.utils.http_client import HttpClient
 from fkstream.scrapers.fankai import FankaiAPI, get_or_fetch_anime_details
+
+_premium_cache = {}
+_PREMIUM_CACHE_TTL = 300
 
 
 class StremThru:
@@ -42,10 +46,18 @@ class StremThru:
 
     async def check_premium(self):
         """Vérifie si l'utilisateur a un abonnement premium."""
+        cache_key = self.default_headers.get("X-StremThru-Store-Authorization", "")
+        now = time.time()
+        if cache_key in _premium_cache:
+            cached_result, cached_time = _premium_cache[cache_key]
+            if now - cached_time < _PREMIUM_CACHE_TTL:
+                return cached_result
         try:
             user_req = await self.session.get(f"{self.base_url}/user?client_ip={self.client_ip}", headers=self.default_headers)
             user = user_req.json()
-            return user["data"]["subscription_status"] == "premium"
+            result = user["data"]["subscription_status"] == "premium"
+            _premium_cache[cache_key] = (result, now)
+            return result
         except Exception as e:
             logger.warning(f"Exception lors de la verification du statut premium sur {self.name}: {e}")
         return False
@@ -59,7 +71,7 @@ class StremThru:
         except Exception as e:
             logger.warning(f"Exception lors de la verification de la disponibilite instantanee du hash sur {self.name}: {e}")
 
-    async def _process_availability_result(self, torrent: dict, seeders_map: dict, tracker_map: dict, sources_map: dict, cached_anime: dict = None):
+    async def _process_availability_result(self, torrent: dict):
         """
         Traite un seul résultat de torrent de la vérification de disponibilité.
         Renvoie simplement le statut brut pour être traité plus tard.
@@ -117,21 +129,7 @@ class StremThru:
             availability_results = await self._fetch_availability_in_chunks(unknown_hashes)
             logger.info(f"🔍 StremThru reponse brute: {availability_results}")
 
-            # Récupérer les métadonnées anime une seule fois pour éviter les requêtes redondantes
-            cached_anime = None
-            if self.sid and self.sid.startswith("fk:"):
-                try:
-                    parts = self.sid.split(":")
-                    if len(parts) >= 3 and parts[1] != "playback_filename":
-                        anime_id = parts[1]
-                        fankai_api = FankaiAPI(self.session)
-                        cached_anime = await get_or_fetch_anime_details(fankai_api, anime_id)
-                        if cached_anime:
-                            logger.info(f"📚 StremThru: Metadonnees anime recuperees une seule fois pour {anime_id} (evite {len(availability_results)} requetes redondantes)")
-                except Exception as e:
-                    logger.warning(f"⚠️ StremThru: Erreur lors de la recuperation des metadonnees anime: {e}")
-
-            process_tasks = [self._process_availability_result(torrent, seeders_map, tracker_map, sources_map, cached_anime) for torrent in availability_results]
+            process_tasks = [self._process_availability_result(torrent) for torrent in availability_results]
             processed_files_list = await asyncio.gather(*process_tasks)
             for file_list in processed_files_list:
                 if file_list: newly_processed_files.extend(file_list)
@@ -268,8 +266,8 @@ class StremThru:
                             return None
                         
                         formatted_files = [{"title": f.get("name", "").split("/")[-1], "size": f.get("size", 0), "original_file": f} for f in files_with_link]
-                        episode_info = {"nfo_filename": nfo_filename}
-                        best_file = find_best_file_for_episode(formatted_files, episode_info)
+                        temp_episode = Episode(id="temp", name="temp", nfo_filename=nfo_filename)
+                        best_file = await find_best_file_for_episode(self.session, formatted_files, temp_episode)
                         if best_file: return best_file["original_file"]
             except (ValueError, IndexError):
                 pass

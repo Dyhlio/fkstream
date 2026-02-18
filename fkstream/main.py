@@ -12,12 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from fkstream.api.core import main as core_router
-from fkstream.api.stream import streams as stream_router
+from fkstream.api.general import general_router
+from fkstream.api.configure import configure_router
+from fkstream.api.stremio import stremio_router
+from fkstream.api.stream import stream_router
+from fkstream.api.kodi import kodi_router
 from fkstream.utils.database import (
     setup_database,
     teardown_database,
     cleanup_expired_locks,
+    cleanup_expired_kodi_codes,
 )
 from fkstream.utils.http_client import HttpClient
 from fkstream.utils.common_logger import logger
@@ -103,6 +107,9 @@ async def lifespan(app: FastAPI):
     # Tâche de nettoyage pour les verrous expirés
     cleanup_task = asyncio.create_task(cleanup_expired_locks())
 
+    # Tâche de nettoyage pour les codes Kodi expirés
+    kodi_cleanup_task = asyncio.create_task(cleanup_expired_kodi_codes())
+
     # Tâche de mise à jour périodique des custom sources
     custom_source_task = None
     if settings.CUSTOM_SOURCE_URL:
@@ -115,10 +122,11 @@ async def lifespan(app: FastAPI):
     finally:
         # Nettoyage à l'arrêt de l'application
         cleanup_task.cancel()
+        kodi_cleanup_task.cancel()
         if custom_source_task:
             custom_source_task.cancel()
 
-        tasks = [cleanup_task]
+        tasks = [cleanup_task, kodi_cleanup_task]
         if custom_source_task:
             tasks.append(custom_source_task)
 
@@ -132,18 +140,38 @@ async def lifespan(app: FastAPI):
         logger.info("Ressources de l'application nettoyées.")
 
 
+tags_metadata = [
+    {
+        "name": "General",
+        "description": "Endpoints generaux de l'application.",
+    },
+    {
+        "name": "Configuration",
+        "description": "Endpoints de configuration de l'addon.",
+    },
+    {
+        "name": "Stremio",
+        "description": "Endpoints du protocole Stremio (manifest, catalogue, meta, stream, playback).",
+    },
+    {
+        "name": "Kodi",
+        "description": "Endpoints specifiques a l'appairage et la configuration Kodi.",
+    },
+]
+
 app = FastAPI(
     title="FKStream",
     summary="FKStream – Addon non officiel pour accéder au contenu de Fankai",
     lifespan=lifespan,
     redoc_url=None,
+    openapi_tags=tags_metadata,
 )
 
 app.add_middleware(LoguruMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -155,8 +183,11 @@ if os.path.exists(static_dir) and os.path.isdir(static_dir):
 else:
     logger.warning(f"Repertoire statique {static_dir} non trouve, les fichiers statiques ne seront pas disponibles")
 
-app.include_router(core_router)
+app.include_router(general_router)
+app.include_router(configure_router)
+app.include_router(stremio_router)
 app.include_router(stream_router)
+app.include_router(kodi_router)
 
 
 class Server(uvicorn.Server):
@@ -198,9 +229,12 @@ def start_log():
         "FKSTREAM",
         f"Serveur demarre sur http://{settings.FASTAPI_HOST}:{settings.FASTAPI_PORT} - {settings.FASTAPI_WORKERS} workers",
     )
+    db_display = settings.DATABASE_PATH if settings.DATABASE_TYPE == "sqlite" else (
+        "***@" + settings.DATABASE_URL.split("@")[-1] if settings.DATABASE_URL and "@" in settings.DATABASE_URL else settings.DATABASE_URL
+    )
     logger.log(
         "FKSTREAM",
-        f"Base de donnees ({settings.DATABASE_TYPE}): {settings.DATABASE_PATH if settings.DATABASE_TYPE == 'sqlite' else settings.DATABASE_URL} - TTL: metadata={settings.METADATA_TTL}s, debrid={settings.DEBRID_AVAILABILITY_TTL}s",
+        f"Base de donnees ({settings.DATABASE_TYPE}): {db_display} - TTL: metadata={settings.METADATA_TTL}s, debrid={settings.DEBRID_AVAILABILITY_TTL}s",
     )
     logger.log("FKSTREAM", f"Proxy Debrid: {settings.DEBRID_PROXY_URL}")
     logger.log(

@@ -14,7 +14,7 @@ def validate_config(b64config: str) -> dict:
         config = orjson.loads(b64_decode(b64config))
 
         if "indexers" in config:
-            return False
+            return None
 
         validated_config = ConfigModel(**config).model_dump()
 

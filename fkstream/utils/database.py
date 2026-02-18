@@ -2,6 +2,7 @@ import os
 import time
 import json
 import asyncio
+import uuid
 
 from fkstream.utils.common_logger import logger
 from fkstream.utils.models import database, settings
@@ -28,7 +29,7 @@ async def setup_database():
             logger.log("FKSTREAM", f"Base de donnees: Migration de la version {current_version} a {DATABASE_VERSION}")
 
             if settings.DATABASE_TYPE == "sqlite":
-                allowed_tables = {'scrape_lock', 'metadata', 'debrid_availability'}
+                allowed_tables = {'scrape_lock', 'metadata', 'debrid_availability', 'kodi_setup_codes'}
                 tables = await database.fetch_all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('db_version', 'sqlite_sequence')")
                 for table in tables:
                     table_name = table['name']
@@ -60,11 +61,10 @@ async def setup_database():
         await database.execute("CREATE TABLE IF NOT EXISTS metadata (media_id TEXT PRIMARY KEY, media_data TEXT, timestamp REAL NOT NULL, expires_at REAL)")
         await database.execute("CREATE TABLE IF NOT EXISTS debrid_availability (media_id TEXT NOT NULL, hash TEXT NOT NULL, debrid_service TEXT NOT NULL, status TEXT NOT NULL, timestamp REAL NOT NULL, expires_at REAL, PRIMARY KEY (media_id, hash, debrid_service))")
         await database.execute("CREATE TABLE IF NOT EXISTS custom_source (page_url TEXT PRIMARY KEY, direct_url TEXT NOT NULL, timestamp REAL NOT NULL, expires_at REAL NOT NULL)")
+        await database.execute("CREATE TABLE IF NOT EXISTS kodi_setup_codes (code TEXT PRIMARY KEY, nonce TEXT NOT NULL, b64config TEXT, created_at REAL NOT NULL, expires_at REAL NOT NULL, consumed_at REAL)")
 
-        if settings.DATABASE_TYPE == "sqlite":
-            await database.execute("CREATE INDEX IF NOT EXISTS idx_custom_source_expires ON custom_source(expires_at)")
-        else:
-            await database.execute("CREATE INDEX IF NOT EXISTS idx_custom_source_expires ON custom_source(expires_at)")
+        await database.execute("CREATE INDEX IF NOT EXISTS idx_custom_source_expires ON custom_source(expires_at)")
+        await database.execute("CREATE INDEX IF NOT EXISTS idx_kodi_expires ON kodi_setup_codes(expires_at)")
 
         if settings.DATABASE_TYPE == "sqlite":
             await database.execute("PRAGMA busy_timeout=30000")
@@ -79,11 +79,13 @@ async def setup_database():
             database.execute("DELETE FROM metadata WHERE expires_at IS NOT NULL AND expires_at < :current_time;", {"current_time": current_time}),
             database.execute("DELETE FROM debrid_availability WHERE expires_at IS NOT NULL AND expires_at < :current_time;", {"current_time": current_time}),
             database.execute("DELETE FROM custom_source WHERE expires_at < :current_time;", {"current_time": current_time}),
+            database.execute("DELETE FROM kodi_setup_codes WHERE expires_at < :current_time;", {"current_time": current_time}),
         ]
         await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
     except Exception as e:
         logger.error(f"Erreur lors de la configuration de la base de donnees: {e}")
+        raise
 
 
 async def cleanup_expired_locks():
@@ -174,15 +176,16 @@ async def acquire_lock(lock_key: str, instance_id: str, duration: int = None) ->
         current_time = int(time.time())
         lock_duration = duration if duration is not None else settings.SCRAPE_LOCK_TTL
         expires_at = current_time + lock_duration
-        
+
         if settings.DATABASE_TYPE == "sqlite":
             query = "INSERT OR IGNORE INTO scrape_lock (lock_key, instance_id, timestamp, expires_at) VALUES (:lock_key, :instance_id, :timestamp, :expires_at)"
         else:
             query = "INSERT INTO scrape_lock (lock_key, instance_id, timestamp, expires_at) VALUES (:lock_key, :instance_id, :timestamp, :expires_at) ON CONFLICT (lock_key) DO NOTHING"
-        await database.execute(query, {"lock_key": lock_key, "instance_id": instance_id, "timestamp": current_time, "expires_at": expires_at})
-        
-        existing_lock = await database.fetch_one("SELECT instance_id, expires_at FROM scrape_lock WHERE lock_key = :lock_key", {"lock_key": lock_key})
-        
+
+        async with database.transaction():
+            await database.execute(query, {"lock_key": lock_key, "instance_id": instance_id, "timestamp": current_time, "expires_at": expires_at})
+            existing_lock = await database.fetch_one("SELECT instance_id, expires_at FROM scrape_lock WHERE lock_key = :lock_key", {"lock_key": lock_key})
+
         if existing_lock:
             if existing_lock["expires_at"] < current_time:
                 deleted = await database.execute("DELETE FROM scrape_lock WHERE lock_key = :lock_key AND expires_at < :current_time", {"lock_key": lock_key, "current_time": current_time})
@@ -193,7 +196,7 @@ async def acquire_lock(lock_key: str, instance_id: str, duration: int = None) ->
             else:
                 logger.log("LOCK", f"❌ Verrou deja detenu par une autre instance: {lock_key}")
                 return False
-        
+
         logger.log("LOCK", f"✅ Verrou acquis: {lock_key}")
         return True
     except Exception as e:
@@ -219,7 +222,7 @@ class DistributedLock:
     """Gestionnaire de contexte pour le verrouillage distribué."""
     def __init__(self, lock_key: str, instance_id: str = None, duration: int = None):
         self.lock_key = lock_key
-        self.instance_id = instance_id or f"fkstream_{int(time.time())}"
+        self.instance_id = instance_id or f"fkstream_{uuid.uuid4().hex[:12]}"
         self.duration = duration if duration is not None else settings.SCRAPE_LOCK_TTL
         self.acquired = False
     
@@ -246,6 +249,89 @@ class DistributedLock:
 class LockAcquisitionError(Exception):
     """Levée lorsqu'un verrou ne peut pas être acquis."""
     pass
+
+
+async def create_kodi_setup_code(code: str, nonce: str, created_at: float, expires_at: float) -> bool:
+    """Crée un code d'appairage Kodi. Retourne True si l'insertion a réussi."""
+    try:
+        if settings.DATABASE_TYPE == "sqlite":
+            await database.execute(
+                "INSERT OR IGNORE INTO kodi_setup_codes (code, nonce, b64config, created_at, expires_at, consumed_at) VALUES (:code, :nonce, NULL, :created_at, :expires_at, NULL)",
+                {"code": code, "nonce": nonce, "created_at": created_at, "expires_at": expires_at},
+            )
+        else:
+            await database.execute(
+                "INSERT INTO kodi_setup_codes (code, nonce, b64config, created_at, expires_at, consumed_at) VALUES (:code, :nonce, NULL, :created_at, :expires_at, NULL) ON CONFLICT (code) DO NOTHING",
+                {"code": code, "nonce": nonce, "created_at": created_at, "expires_at": expires_at},
+            )
+
+        result = await database.fetch_one(
+            "SELECT nonce FROM kodi_setup_codes WHERE code = :code AND nonce = :nonce",
+            {"code": code, "nonce": nonce},
+        )
+        return result is not None
+    except Exception as e:
+        logger.error(f"Erreur création code Kodi: {e}")
+        return False
+
+
+async def associate_kodi_manifest(code: str, b64config: str) -> bool:
+    """Associe une configuration à un code Kodi. Retourne True si l'association a réussi."""
+    try:
+        current_time = time.time()
+        await database.execute(
+            "UPDATE kodi_setup_codes SET b64config = :b64config WHERE code = :code AND consumed_at IS NULL AND expires_at >= :now",
+            {"b64config": b64config, "code": code, "now": current_time},
+        )
+
+        result = await database.fetch_one(
+            "SELECT b64config FROM kodi_setup_codes WHERE code = :code AND consumed_at IS NULL AND expires_at >= :now AND b64config IS NOT NULL",
+            {"code": code, "now": current_time},
+        )
+        return result is not None
+    except Exception as e:
+        logger.error(f"Erreur association manifest Kodi: {e}")
+        return False
+
+
+async def get_kodi_manifest(code: str):
+    """Récupère et consomme un code Kodi. Retourne le b64config ou None. Supprime le code après consommation."""
+    try:
+        current_time = time.time()
+        result = await database.fetch_one(
+            "SELECT b64config FROM kodi_setup_codes WHERE code = :code AND consumed_at IS NULL AND expires_at >= :now AND b64config IS NOT NULL",
+            {"code": code, "now": current_time},
+        )
+
+        if not result:
+            return None
+
+        b64config = result["b64config"]
+
+        # Marquer comme consommé puis supprimer pour éviter toute réutilisation
+        await database.execute(
+            "DELETE FROM kodi_setup_codes WHERE code = :code",
+            {"code": code},
+        )
+
+        return {"b64config": b64config}
+    except Exception as e:
+        logger.error(f"Erreur récupération manifest Kodi: {e}")
+        return None
+
+
+async def cleanup_expired_kodi_codes():
+    """Tâche de nettoyage périodique pour les codes Kodi expirés ou consommés."""
+    while True:
+        try:
+            current_time = time.time()
+            await database.execute(
+                "DELETE FROM kodi_setup_codes WHERE expires_at < :current_time OR consumed_at IS NOT NULL",
+                {"current_time": current_time},
+            )
+        except Exception as e:
+            logger.error(f"Erreur nettoyage codes Kodi: {e}")
+        await asyncio.sleep(60)
 
 
 async def teardown_database():

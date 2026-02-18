@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.fkstream" version="1.0.0" name="FKStream" provider-name="FKStream">
+    <requires>
+        <import addon="xbmc.python" version="3.0.1" />
+        <import addon="script.module.requests" version="2.31.0" />
+        <import addon="plugin.video.elementum" version="0.1.112" optional="true" />
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="fr_FR">FKStream - Addon pour accéder au contenu Fankai</summary>
+        <description lang="fr_FR">FKStream est un addon Kodi pour parcourir et streamer des animes depuis le catalogue Fankai. Compatible avec les services de débridage et le mode torrent direct via Elementum.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>resources/icon.jpg</icon>
+            <fanart>resources/fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

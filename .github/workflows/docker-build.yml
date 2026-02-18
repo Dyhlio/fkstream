@@ -17,10 +17,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Get version from core.py
+    - name: Get version from stremio.py
       id: get-version
       run: |
-        VERSION=$(grep '"version":' fkstream/api/core.py | sed -n 's/.*"version": "\([^"]*\)".*/\1/p')
+        VERSION=$(grep '"version":' fkstream/api/stremio.py | sed -n 's/.*"version": "\([^"]*\)".*/\1/p')
         echo "Extracted version: $VERSION"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 

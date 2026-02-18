@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Optional, Dict, Any
 
 from fkstream.utils.http_client import HttpClient
@@ -14,12 +15,13 @@ async def _fetch_complete_anime_data(fankai_api: "FankaiAPI", anime_id: str) -> 
         return None
 
     seasons = await fankai_api.get_seasons(anime_id)
-    for season in seasons:
-        season_episodes = await fankai_api.get_episodes(str(season.get("id")))
-        season["episodes"] = season_episodes
-    
-    actors = await fankai_api.get_actors(anime_id)
-    
+    episode_tasks = [fankai_api.get_episodes(str(season.get("id"))) for season in seasons]
+    actor_task = fankai_api.get_actors(anime_id)
+    results = await asyncio.gather(*episode_tasks, actor_task)
+    for i, season in enumerate(seasons):
+        season["episodes"] = results[i]
+    actors = results[-1]
+
     anime_data["seasons"] = seasons
     anime_data["actors"] = actors
     return anime_data

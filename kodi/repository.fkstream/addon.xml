@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.fkstream" version="1.0.0" name="FKStream Repository" provider-name="FKStream">
+    <extension point="xbmc.addon.repository" name="FKStream Repository">
+        <dir>
+            <info compressed="false">https://dyhlio.github.io/fkstream/addons.xml</info>
+            <checksum>https://dyhlio.github.io/fkstream/addons.xml.md5</checksum>
+            <datadir zip="true">https://dyhlio.github.io/fkstream/</datadir>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="fr_FR">FKStream Repository</summary>
+        <description lang="fr_FR">Dépôt pour l'addon Kodi FKStream</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.jpg</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
