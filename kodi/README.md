@@ -70,5 +70,3 @@ dist/
     ├── fanart.jpg
     └── repository.fkstream-X.X.X.zip
 ```
-
-Les versions sont lues automatiquement depuis les fichiers `addon.xml` de chaque addon. Le contenu de `dist/` peut ensuite être publié sur GitHub Pages ou n'importe quel hébergement statique.
