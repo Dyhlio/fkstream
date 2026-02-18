@@ -1,8 +1,8 @@
 import re
+import time
 import unicodedata
-from fastapi import Request
 from fkstream.utils.common_logger import logger
-from fkstream.utils.models import Anime, Episode
+from fkstream.utils.models import Episode
 
 # --- Fonctions utilitaires de base ---
 
@@ -18,6 +18,12 @@ def bytes_to_size(bytes_val: int) -> str:
         return f"{bytes_val/1024**2:.2f} MB"
     else:
         return f"{bytes_val/1024**3:.2f} GB"
+
+# --- Cache module-level pour la liste de renommage ---
+
+_rename_map_cache: dict | None = None
+_rename_map_cache_time: float = 0
+_RENAME_MAP_TTL = 604800  # 7 jours
 
 # --- Logique de matching ---
 
@@ -47,39 +53,44 @@ def _normalize_filename_for_matching(filename: str) -> str:
     
     return ' '.join(base.split()).strip()
 
-async def _get_rename_map(request: Request) -> dict:
+async def _get_rename_map(http_client) -> dict:
     """
     Récupère et met en cache le dictionnaire de renommage depuis l'URL distante.
+    Utilise un cache module-level avec TTL de 7 jours pour éviter les téléchargements répétés.
     """
-    if hasattr(request.app.state, 'rename_map'):
-        return request.app.state.rename_map
+    global _rename_map_cache, _rename_map_cache_time
+    if _rename_map_cache is not None and (time.time() - _rename_map_cache_time) < _RENAME_MAP_TTL:
+        return _rename_map_cache
 
     logger.info("Mise en cache de la liste de renommage depuis l'URL...")
     rename_map = {}
     url = "https://raw.githubusercontent.com/Nackophilz/fankai_utilitaire/refs/heads/main/rename/films.txt"
-    
-    try:
-        http_client = request.app.state.http_client
 
+    try:
         response = await http_client.get(url)
-        response.raise_for_status() # Lève une exception pour les erreurs HTTP
-        
+        response.raise_for_status()
+
         content = response.text
         for line in content.splitlines():
             if ' -> ' in line:
                 old, new = line.split(' -> ', 1)
                 rename_map[old.strip()] = new.strip()
-        
-        request.app.state.rename_map = rename_map
+
+        _rename_map_cache = rename_map
+        _rename_map_cache_time = time.time()
         logger.info(f"Liste de renommage chargée avec succès ({len(rename_map)} entrées).")
         return rename_map
-            
+
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la liste de renommage: {e}")
-        request.app.state.rename_map = {}
+        if _rename_map_cache is not None:
+            logger.info("Utilisation du cache existant de la liste de renommage.")
+            return _rename_map_cache
+        _rename_map_cache = {}
+        _rename_map_cache_time = time.time()
         return {}
 
-async def find_best_file_for_episode(request: Request, files_in_torrent: list[dict], selected_episode: Episode) -> dict | None:
+async def find_best_file_for_episode(http_client, files_in_torrent: list[dict], selected_episode: Episode) -> dict | None:
     """
     Trouve le fichier le plus pertinent en utilisant une stratégie de matching en 3 étapes.
     """
@@ -117,7 +128,7 @@ async def find_best_file_for_episode(request: Request, files_in_torrent: list[di
             
     # Étape 3: Match avec liste de renommage
     logger.debug("Étape 3: Recherche avec la liste de renommage...")
-    rename_map = await _get_rename_map(request)
+    rename_map = await _get_rename_map(http_client)
     if rename_map:
         for file_info in files_in_torrent:
             file_title = file_info.get("title", "")

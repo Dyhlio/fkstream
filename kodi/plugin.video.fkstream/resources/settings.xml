@@ -1,0 +1,7 @@
+<settings>
+    <category label="FKStream">
+        <setting label="URL du serveur FKStream" id="base_url" type="text" default="" />
+        <setting label="Configuration" id="secret_string" type="text" default="" />
+        <setting label="Configurer / Appairage" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.fkstream/lib/custom_settings_window.py)" />
+    </category>
+</settings>

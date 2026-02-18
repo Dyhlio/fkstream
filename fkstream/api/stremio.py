@@ -1,19 +1,17 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Request, Depends
 from urllib.parse import quote, urlparse, parse_qs
 from datetime import datetime
 
-from fkstream.utils.models import settings, web_config, Episode
+from fkstream.utils.models import settings, default_config
 from fkstream.utils.config_validator import config_check
 from fkstream.debrid.manager import get_debrid_extension
 from fkstream.scrapers.fankai import FankaiAPI, get_or_fetch_anime_details
 from fkstream.utils.common_logger import logger
 from fkstream.utils.database import get_metadata_from_cache, set_metadata_to_cache
 from fkstream.utils.dependencies import get_fankai_api
+from fkstream.utils.general import normalize_name
 
-templates = Jinja2Templates("fkstream/templates")
-main = APIRouter()
+stremio_router = APIRouter(tags=["Stremio"])
 
 
 def _translate_status(status: str) -> str:
@@ -54,44 +52,61 @@ def _build_genre_links(request: Request, b64config: str, genres: list) -> list:
     return genre_links
 
 
-@main.get("/")
-async def root():
-    return RedirectResponse("/configure")
+def _parse_genres(genres_raw: str) -> list:
+    """Parse une chaîne de genres séparés par des virgules."""
+    if not genres_raw:
+        return []
+    return [g.strip() for g in genres_raw.split(',') if g.strip()]
 
 
-@main.get("/health")
-async def health():
-    """Endpoint de vérification de l'état de santé de l'application."""
-    return {"status": "ok"}
+def _build_imdb_links(data: dict) -> list:
+    """Construit les liens IMDB pour un anime."""
+    if not data.get('imdb_id'):
+        return []
+    rating_display = str(data.get('rating_value')) if data.get('rating_value') else "N/A"
+    return [{
+        "name": rating_display,
+        "category": "imdb",
+        "url": f"https://imdb.com/title/{data.get('imdb_id')}"
+    }]
 
 
-@main.get("/configure")
-@main.get("/{b64config}/configure")
-async def configure(request: Request):
-    """Affiche la page de configuration de l'addon."""
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "CUSTOM_HEADER_HTML": settings.CUSTOM_HEADER_HTML or "",
-            "webConfig": web_config,
-            "proxyDebridStream": settings.PROXY_DEBRID_STREAM,
-        },
-    )
+def _extract_youtube_trailer(trailer_url: str, anime_id) -> list | None:
+    """Extrait les informations de trailer YouTube et retourne une liste de trailers ou None."""
+    if not trailer_url:
+        logger.debug(f"TRAILER - Pas de 'trailer_url' trouve pour l'anime {anime_id}.")
+        return None
+    logger.debug(f"TRAILER - URL de bande-annonce trouvee: {trailer_url}")
+    if "youtube" in trailer_url:
+        try:
+            parsed_url = urlparse(trailer_url)
+            query_params = parse_qs(parsed_url.query)
+            video_id = query_params.get("video_id", query_params.get("v", [None]))[0]
+            if video_id:
+                trailers = [{"source": video_id, "type": "Trailer"}]
+                logger.debug(f"TRAILER - Ajout de la propriete 'trailers' au meta-objet: {trailers}")
+                return trailers
+            else:
+                logger.warning(f"TRAILER - Impossible d'extraire le video_id de l'URL: {trailer_url}")
+        except Exception as e:
+            logger.warning(f"TRAILER - Impossible de parser l'URL de la bande-annonce '{trailer_url}': {e}")
+    else:
+        logger.warning(f"TRAILER - L'URL de la bande-annonce n'est pas une URL YouTube: {trailer_url}")
+    return None
 
 
-@main.get("/manifest.json")
-@main.get("/{b64config}/manifest.json")
+@stremio_router.get("/manifest.json")
+@stremio_router.get("/{b64config}/manifest.json")
 async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAPI = Depends(get_fankai_api)):
     """
-    Fournit le manifeste de l'addon à Stremio.
+    Fournit le manifeste de l'addon a Stremio.
     Personnalise le nom et la description en fonction de la configuration.
     """
     base_manifest = {
         "id": settings.ADDON_ID,
         "name": settings.ADDON_NAME,
         "description": "FKStream – Addon non officiel pour accéder au contenu de Fankai",
-        "version": "1.4.1",
+        "version": "1.5.0",
         "catalogs": [
             {
                 "type": "anime",
@@ -129,7 +144,7 @@ async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAP
     if not config:
         base_manifest["name"] = "❌ | FKStream"
         base_manifest["description"] = (
-            f"⚠️ CONFIGURATION OBSELETE, VEUILLEZ RECONFIGURER SUR {request.url.scheme}://{request.url.netloc} ⚠️"
+            f"⚠️ CONFIGURATION OBSOLETE, VEUILLEZ RECONFIGURER SUR {request.url.scheme}://{request.url.netloc} ⚠️"
         )
         return base_manifest
 
@@ -148,9 +163,9 @@ async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAP
 
 async def extract_unique_genres(fankai_api: FankaiAPI) -> list[str]:
     """
-    Extrait tous les genres uniques à partir des données d'anime de l'API Fankai.
-    Utilise le même cache que la liste d'animes pour la cohérence.
-    Retourne une liste triée de genres uniques.
+    Extrait tous les genres uniques a partir des donnees d'anime de l'API Fankai.
+    Utilise le meme cache que la liste d'animes pour la coherence.
+    Retourne une liste triee de genres uniques.
     """
     animes_data = await get_metadata_from_cache("fk:list")
 
@@ -175,16 +190,16 @@ async def extract_unique_genres(fankai_api: FankaiAPI) -> list[str]:
     return sorted_genres
 
 
-@main.get("/catalog/anime/fankai_catalog.json")
-@main.get("/{b64config}/catalog/anime/fankai_catalog.json")
-@main.get("/catalog/anime/fankai_catalog/search={search}.json")
-@main.get("/{b64config}/catalog/anime/fankai_catalog/search={search}.json")
-@main.get("/catalog/anime/fankai_catalog/genre={genre}.json")
-@main.get("/{b64config}/catalog/anime/fankai_catalog/genre={genre}.json")
-@main.get("/catalog/anime/fankai_catalog/search={search}&genre={genre}.json")
-@main.get("/{b64config}/catalog/anime/fankai_catalog/search={search}&genre={genre}.json")
-@main.get("/catalog/anime/fankai_catalog/sort={sort}.json")
-@main.get("/{b64config}/catalog/anime/fankai_catalog/sort={sort}.json")
+@stremio_router.get("/catalog/anime/fankai_catalog.json")
+@stremio_router.get("/{b64config}/catalog/anime/fankai_catalog.json")
+@stremio_router.get("/catalog/anime/fankai_catalog/search={search}.json")
+@stremio_router.get("/{b64config}/catalog/anime/fankai_catalog/search={search}.json")
+@stremio_router.get("/catalog/anime/fankai_catalog/genre={genre}.json")
+@stremio_router.get("/{b64config}/catalog/anime/fankai_catalog/genre={genre}.json")
+@stremio_router.get("/catalog/anime/fankai_catalog/search={search}&genre={genre}.json")
+@stremio_router.get("/{b64config}/catalog/anime/fankai_catalog/search={search}&genre={genre}.json")
+@stremio_router.get("/catalog/anime/fankai_catalog/sort={sort}.json")
+@stremio_router.get("/{b64config}/catalog/anime/fankai_catalog/sort={sort}.json")
 async def fankai_catalog(request: Request, b64config: str = None, search: str = None, genre: str = None, sort: str = None, fankai_api: FankaiAPI = Depends(get_fankai_api)):
     """
     Fournit le catalogue d'animes en filtrant par le dataset local.
@@ -198,12 +213,13 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
 
     logger.info(f"🔍 CATALOG - Catalogue Fankai demandé, recherche: {search}, genre: {genre}, tri: {sort}")
 
-    # 1. Obtenir la liste des api_id autorisés depuis le dataset
+    # 1. Obtenir la liste des api_id et noms autorisés depuis le dataset
     dataset_animes = request.app.state.dataset.get('top', [])
     available_api_ids = {str(anime.get('api_id')) for anime in dataset_animes}
+    available_names_norm = {normalize_name(anime.get('name', '')) for anime in dataset_animes}
 
-    if not available_api_ids:
-        logger.warning("Le dataset est vide ou ne contient aucun api_id. Le catalogue sera vide.")
+    if not dataset_animes:
+        logger.warning("Le dataset est vide. Le catalogue sera vide.")
         return {"metas": []}
 
     animes_data = await get_metadata_from_cache("fk:list")
@@ -214,25 +230,25 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
         logger.debug("📦 CACHE MISS: fk:list - Recuperation depuis l'API")
         animes_data = await fankai_api.get_all_series()
         await set_metadata_to_cache("fk:list", animes_data)
-        
-    # 2. Filtrer la liste d'animes (du cache ou de l'API) pour ne garder que ceux du dataset
-    animes_data = [anime for anime in animes_data if str(anime.get('id')) in available_api_ids]
+
+    # 2. Filtrer la liste d'animes : par api_id d'abord, fallback par nom normalisé
+    animes_data = [anime for anime in animes_data if str(anime.get('id')) in available_api_ids or normalize_name(anime.get('title', '')) in available_names_norm]
     logger.info(f"Filtrage par dataset : {len(animes_data)} animes valides à traiter.")
 
-
-
     config = config_check(b64config)
-    
+    if not config:
+        config = default_config
+
     # Mapping des noms d'affichage vers les clés internes
     sort_mapping = {
         "Dernière mise à jour": "last_update",
-        "Note": "rating_value", 
+        "Note": "rating_value",
         "Titre": "title",
         "Année": "year"
     }
-    
+
     sort_by = sort_mapping.get(sort, config.get("defaultSort", "last_update")) if sort else config.get("defaultSort", "last_update")
-    
+
     logger.info(f"Tri du catalogue par: {sort_by}")
 
     def get_sort_value(anime, key):
@@ -255,8 +271,7 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
     metas = []
     for anime in animes_data:
         anime_title = anime.get('title', '')
-        genres_raw = anime.get('genres', '')
-        genres = [g.strip() for g in genres_raw.split(',') if g.strip()] if genres_raw else []
+        genres = _parse_genres(anime.get('genres', ''))
 
         if search and search.lower() not in anime_title.lower():
             continue
@@ -264,16 +279,8 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
         if genre and genre not in genres:
             continue
 
-
         genre_links = _build_genre_links(request, b64config, genres)
-        imdb_links = []
-        if anime.get('imdb_id'):
-            rating_display = str(anime.get('rating_value')) if anime.get('rating_value') else "N/A"
-            imdb_links.append({
-                "name": rating_display,
-                "category": "imdb",
-                "url": f"https://imdb.com/title/{anime.get('imdb_id')}"
-            })
+        imdb_links = _build_imdb_links(anime)
 
         meta = {
             "id": f"fk:{anime.get('id')}",
@@ -290,28 +297,10 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
             "description": anime.get('plot', '') or "Aucune description disponible",
             "links": genre_links + imdb_links,
         }
-        
-        # Ajout du trailer si disponible
-        trailer_url = anime.get("trailer_url")
-        if trailer_url:
-            logger.debug(f"TRAILER - URL de bande-annonce trouvee: {trailer_url}")
-            if "youtube" in trailer_url:
-                try:
-                    parsed_url = urlparse(trailer_url)
-                    query_params = parse_qs(parsed_url.query)
-                    video_id = query_params.get("video_id", query_params.get("v", [None]))[0]
 
-                    if video_id:
-                        meta['trailers'] = [{"source": video_id, "type": "Trailer"}]
-                        logger.debug(f"TRAILER - Ajout de la propriete 'trailers' au meta-objet: {meta['trailers']}")
-                    else:
-                        logger.warning(f"TRAILER - Impossible d'extraire le video_id de l'URL: {trailer_url}")
-                except Exception as e:
-                    logger.warning(f"TRAILER - Impossible de parser l'URL de la bande-annonce '{trailer_url}': {e}")
-            else:
-                logger.warning(f"TRAILER - L'URL de la bande-annonce n'est pas une URL YouTube: {trailer_url}")
-        else:
-            logger.debug(f"TRAILER - Pas de 'trailer_url' trouve pour l'anime {anime.get('id')}.")
+        trailers = _extract_youtube_trailer(anime.get("trailer_url"), anime.get('id'))
+        if trailers:
+            meta['trailers'] = trailers
         metas.append(meta)
 
     if search and genre:
@@ -327,7 +316,7 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
 
 
 def _validate_anime_id(anime_id: str) -> bool:
-    """Valide un ID d'anime en s'assurant qu'il est numérique et dans une plage réaliste."""
+    """Valide un ID d'anime en s'assurant qu'il est numerique et dans une plage realiste."""
     if not anime_id.isdigit():
         return False
     try:
@@ -337,11 +326,11 @@ def _validate_anime_id(anime_id: str) -> bool:
         return False
 
 
-@main.get("/meta/anime/{id}.json")
-@main.get("/{b64config}/meta/anime/{id}.json")
+@stremio_router.get("/meta/anime/{id}.json")
+@stremio_router.get("/{b64config}/meta/anime/{id}.json")
 async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_api: FankaiAPI = Depends(get_fankai_api)):
     """
-    Fournit les métadonnées détaillées pour un anime spécifique.
+    Fournit les metadonnees detaillees pour un anime specifique.
     """
     if not id.startswith("fk:"):
         return {"meta": {}}
@@ -358,7 +347,7 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
         return {"meta": {}}
 
     logger.debug(f"ANIME_DATA KEYS - Cles disponibles pour l'anime {anime_id}: {list(anime_data.keys())}")
-    
+
     # Structure de meta (plus conforme)
     meta = {
         "id": f"fk:{anime_data.get('id')}",
@@ -380,30 +369,11 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
 
     videos = []
 
-    # Ajout du trailer si disponible
-    trailer_url = anime_data.get("trailer_url")
-    if trailer_url:
-        logger.debug(f"TRAILER - URL de bande-annonce trouvee: {trailer_url}")
-        if "youtube" in trailer_url:
-            try:
-                parsed_url = urlparse(trailer_url)
-                query_params = parse_qs(parsed_url.query)
-                video_id = query_params.get("video_id", query_params.get("v", [None]))[0]
+    trailers = _extract_youtube_trailer(anime_data.get("trailer_url"), anime_id)
+    if trailers:
+        meta['trailers'] = trailers
 
-                if video_id:
-                    meta['trailers'] = [{"source": video_id, "type": "Trailer"}]
-                    logger.debug(f"TRAILER - Ajout de la propriete 'trailers' au meta-objet: {meta['trailers']}")
-                else:
-                    logger.warning(f"TRAILER - Impossible d'extraire le video_id de l'URL: {trailer_url}")
-            except Exception as e:
-                logger.warning(f"TRAILER - Impossible de parser l'URL de la bande-annonce '{trailer_url}': {e}")
-        else:
-            logger.warning(f"TRAILER - L'URL de la bande-annonce n'est pas une URL YouTube: {trailer_url}")
-    else:
-        logger.debug(f"TRAILER - Pas de 'trailer_url' trouve pour l'anime {anime_id}.")
-
-
-    # Add episodes
+    # Ajout des episodes
     seasons = anime_data.get("seasons", [])
     for season_idx, season in enumerate(seasons):
         season_number = season.get('season_number', season.get('number', season_idx + 1))
@@ -421,23 +391,15 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
                 "overview": episode.get('plot'),
                 "released": f"{aired_date}T00:00:00.000Z" if aired_date and aired_date != '2024-01-01' else "2024-01-01T00:00:00.000Z"
             })
-    
+
     meta['videos'] = videos
 
-    # Add links
-    genres_raw = anime_data.get('genres', '')
-    genres = [g.strip() for g in genres_raw.split(',') if g.strip()] if genres_raw else []
+    # Ajout des liens
+    genres = _parse_genres(anime_data.get('genres', ''))
     meta['genres'] = genres
-    
+
     genre_links = _build_genre_links(request, b64config, genres)
-    imdb_links = []
-    if anime_data.get('imdb_id'):
-        rating_display = str(anime_data.get('rating_value')) if anime_data.get('rating_value') else "N/A"
-        imdb_links.append({
-            "name": rating_display,
-            "category": "imdb",
-            "url": f"https://imdb.com/title/{anime_data.get('imdb_id')}"
-        })
+    imdb_links = _build_imdb_links(anime_data)
 
     actor_links = []
     actors = anime_data.get('actors', [])

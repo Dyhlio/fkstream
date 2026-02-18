@@ -1,5 +1,6 @@
 import re
 import asyncio
+from pathlib import Path
 from urllib.parse import quote, parse_qs, urlparse
 import html
 
@@ -10,11 +11,10 @@ from fkstream.scrapers.fankai import FankaiAPI, get_or_fetch_anime_details
 from fkstream.scrapers.videas import scrape_videas_url
 from fkstream.utils.common_logger import logger
 from fkstream.utils.dependencies import get_fankai_api
-from fkstream.utils.general import b64_encode
+from fkstream.utils.general import b64_encode, normalize_name
 from fkstream.utils.config_validator import config_check
 from fkstream.utils.models import Anime, Episode
-from fkstream.utils.stream_utils import (bytes_to_size,
-                                         find_best_file_for_episode)
+from fkstream.utils.stream_utils import find_best_file_for_episode
 from fkstream.utils.magnet_store import store_magnet_link
 
 from fastapi.responses import RedirectResponse, FileResponse
@@ -22,8 +22,9 @@ from fkstream.utils.general import get_client_ip, b64_decode
 from fkstream.debrid.stremthru import StremThru
 from fkstream.debrid.manager import build_stremthru_token
 
-# --- Définition du routeur ---
-streams = APIRouter()
+stream_router = APIRouter(tags=["Stremio"])
+
+_UNCACHED_VIDEO = Path(__file__).resolve().parent.parent / "assets" / "uncached.mp4"
 
 
 def extract_trackers_from_magnet(magnet_uri: str) -> list:
@@ -37,7 +38,7 @@ def extract_trackers_from_magnet(magnet_uri: str) -> list:
         return []
 
 
-async def _parse_media_id(media_id: str):
+def _parse_media_id(media_id: str):
     """Analyse et valide le format du media_id."""
     if "fk:" not in media_id:
         return None, None
@@ -93,17 +94,26 @@ async def _fetch_anime_and_episode_data(fankai_api: FankaiAPI, anime_id: str, ep
     logger.info(f"Episode selectionne: {selected_episode.name} (S{selected_episode.season_number}E{selected_episode.number})")
     return anime_info, selected_episode
 
-def _create_stream_item(request: Request, b64config: str, debrid_service: str, debrid_emoji: str, torrent: dict, media_id: str, trackers: list = None):
+def _create_stream_item(request: Request, b64config: str, debrid_service: str, debrid_emoji: str, torrent: dict, media_id: str, trackers: list = None, kodi: bool = False):
     """Crée un dictionnaire représentant un flux (stream)."""
     file_title = torrent['title']
     hash_val = torrent['infoHash']
     display_title = file_title.split('/')[-1]
     raw_size = torrent.get('size', 0)
 
+    # Pour Kodi, on utilise du texte au lieu des emojis
+    if kodi:
+        emoji_map = {"⚡": "En cache", "🧲": "Magnet", "⬇️": "Téléchargement", "❓": "Inconnu"}
+        display_emoji = emoji_map.get(debrid_emoji, debrid_emoji)
+        name = f"[{get_debrid_extension(debrid_service)} {display_emoji}] FKStream"
+        description = display_title
+    else:
+        name = f"[{get_debrid_extension(debrid_service)} {debrid_emoji}] FKStream"
+        description = f"📁 {display_title}"
 
     stream_item = {
-        "name": f"[{get_debrid_extension(debrid_service)} {debrid_emoji}] FKStream",
-        "description": f"📁 {display_title}",
+        "name": name,
+        "description": description,
         "behaviorHints": {
             "bingeGroup": f"fkstream|{hash_val}",
             "filename": display_title,
@@ -121,15 +131,15 @@ def _create_stream_item(request: Request, b64config: str, debrid_service: str, d
         encoded_filename = quote(display_title, safe='')
         encoded_media_id = b64_encode(media_id)
         stream_item["url"] = f"{request.url.scheme}://{request.url.netloc}/{b64config}/playback/{encoded_media_id}/{hash_val}/{torrent.get('fileIndex')}/{encoded_filename}"
-        
+
         logger.info(f"URL generee ({debrid_emoji}): {stream_item['url']} (Source: Dataset, Fichier: {file_title})")
 
     return stream_item
 
 
-@streams.get("/stream/{media_type}/{media_id}.json")
-@streams.get("/{b64config}/stream/{media_type}/{media_id}.json")
-async def stream(request: Request, media_type: str, media_id: str, b64config: str = None, fankai_api: FankaiAPI = Depends(get_fankai_api)):
+@stream_router.get("/stream/{media_type}/{media_id}.json")
+@stream_router.get("/{b64config}/stream/{media_type}/{media_id}.json")
+async def stream(request: Request, media_type: str, media_id: str, b64config: str = None, kodi: bool = False, fankai_api: FankaiAPI = Depends(get_fankai_api)):
     """
     Fournit les flux de streaming en vérifiant la disponibilité debrid au préalable.
     """
@@ -137,7 +147,7 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
     if not config:
         return {"streams": []}
 
-    anime_id, episode_id = await _parse_media_id(media_id)
+    anime_id, episode_id = _parse_media_id(media_id)
     if not anime_id or not episode_id:
         return {"streams": []}
 
@@ -146,10 +156,21 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
         return {"streams": []}
     
     dataset = request.app.state.dataset.get('top', [])
+    anime_name_norm = normalize_name(anime_info.name)
     target_anime_data = next((item for item in dataset if str(item.get('api_id')) == anime_id), None)
 
+    # Vérifier que l'api_id a trouvé le BON anime (les IDs /series et /dataset peuvent ne pas correspondre)
+    if target_anime_data and normalize_name(target_anime_data.get('name', '')) != anime_name_norm:
+        logger.warning(f"api_id {anime_id} a trouvé '{target_anime_data.get('name')}' au lieu de '{anime_info.name}', fallback par nom")
+        target_anime_data = None
+
     if not target_anime_data:
-        logger.warning(f"Anime avec api_id {anime_id} non trouvé dans le dataset local.")
+        target_anime_data = next((item for item in dataset if normalize_name(item.get('name', '')) == anime_name_norm), None)
+        if target_anime_data:
+            logger.info(f"Fallback par nom: '{anime_info.name}' trouvé dans le dataset (api_id dataset: {target_anime_data.get('api_id')})")
+
+    if not target_anime_data:
+        logger.warning(f"Anime '{anime_info.name}' (api_id: {anime_id}) non trouvé dans le dataset local.")
         return {"streams": []}
 
     logger.info(f"Anime trouvé dans dataset: '{target_anime_data.get('name')}' pour épisode '{selected_episode.name}'")
@@ -199,7 +220,7 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
         files_in_torrent = source.get('files', [])
 
         files_for_matching = [{"title": f} for f in files_in_torrent]
-        best_file = await find_best_file_for_episode(request, files_for_matching, selected_episode)
+        best_file = await find_best_file_for_episode(request.app.state.http_client, files_for_matching, selected_episode)
 
         if best_file:
             try:
@@ -227,7 +248,7 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
                     else:
                         debrid_emoji = "❓"
                 
-                stream_item = _create_stream_item(request, b64config, debrid_service, debrid_emoji, torrent_data, media_id, trackers)
+                stream_item = _create_stream_item(request, b64config, debrid_service, debrid_emoji, torrent_data, media_id, trackers, kodi=kodi)
                 streams_list.append(stream_item)
 
 
@@ -239,9 +260,14 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
         logger.warning(f"Aucun stream n'a pu être généré pour {media_id} depuis le dataset.")
 
     custom_sources = request.app.state.custom_sources.get('animes', [])
+    logger.debug(f"Custom sources: {len(custom_sources)} anime(s) chargé(s), recherche api_id={anime_id}")
     custom_anime = next((a for a in custom_sources if str(a.get('api_id')) == anime_id), None)
+    if not custom_anime:
+        anime_name_norm = normalize_name(anime_info.name)
+        custom_anime = next((a for a in custom_sources if normalize_name(a.get('name', '')) == anime_name_norm), None)
 
     if custom_anime:
+        logger.debug(f"Custom anime trouvé: {custom_anime.get('name')}")
         custom_urls = []
         for season in custom_anime.get('seasons', []):
             if season.get('season_number') == selected_episode.season_number:
@@ -255,20 +281,21 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
 
             for direct_url in scraped_results:
                 if direct_url and not isinstance(direct_url, Exception):
+                    custom_name = "[CUSTOM] FKStream" if kodi else "[CUSTOM ⭐] FKStream"
                     streams_list.append({
-                        "name": "[CUSTOM ⭐] FKStream",
-                        "description": f"{anime_info.name} S{selected_episode.season_number:02d}E{selected_episode.number:02d}",
+                        "name": custom_name,
+                        "description": f"{anime_info.name} S{(selected_episode.season_number or 0):02d}E{(selected_episode.number or 0):02d}",
                         "url": direct_url
                     })
 
             added_count = sum(1 for url in scraped_results if url and not isinstance(url, Exception))
             if added_count > 0:
-                logger.log("FKSTREAM", f"{added_count} custom source(s) ajoutée(s) pour {anime_info.name} S{selected_episode.season_number:02d}E{selected_episode.number:02d}")
+                logger.log("FKSTREAM", f"{added_count} custom source(s) ajoutée(s) pour {anime_info.name} S{(selected_episode.season_number or 0):02d}E{(selected_episode.number or 0):02d}")
 
     return {"streams": streams_list}
 
 
-@streams.get("/{b64config}/playback/{b64_media_id}/{hash_val}/{file_index}/{filename:path}")
+@stream_router.get("/{b64config}/playback/{b64_media_id}/{hash_val}/{file_index}/{filename:path}")
 async def playback(request: Request, b64config: str, b64_media_id: str, hash_val: str, file_index: int, filename: str):
     """
     Gère la lecture du média : contacte le service debrid et redirige vers le lien final
@@ -276,19 +303,19 @@ async def playback(request: Request, b64config: str, b64_media_id: str, hash_val
     """
     config = config_check(b64config)
     if not config or config.get("debridService") == "torrent":
-        return FileResponse("fkstream/assets/uncached.mp4", media_type="video/mp4")
+        return FileResponse(_UNCACHED_VIDEO, media_type="video/mp4")
 
     try:
         real_media_id = b64_decode(b64_media_id)
         media_only_id = real_media_id.split(':')[1]
     except Exception:
         logger.error(f"Impossible de décoder le media_id: {b64_media_id}")
-        return FileResponse("fkstream/assets/uncached.mp4", media_type="video/mp4")
+        return FileResponse(_UNCACHED_VIDEO, media_type="video/mp4")
 
-    anime_id, episode_id = await _parse_media_id(real_media_id)
+    anime_id, episode_id = _parse_media_id(real_media_id)
     if not anime_id or not episode_id:
         logger.error(f"Impossible d'analyser l'ID de l'anime/épisode depuis {real_media_id}")
-        return FileResponse("fkstream/assets/uncached.mp4", media_type="video/mp4")
+        return FileResponse(_UNCACHED_VIDEO, media_type="video/mp4")
 
     #! On récupère les détails complets de l'épisode pour avoir la saison et le numéro
     fankai_api = FankaiAPI(request.app.state.http_client)
@@ -296,11 +323,11 @@ async def playback(request: Request, b64config: str, b64_media_id: str, hash_val
 
     if not selected_episode:
         logger.error(f"Impossible de récupérer les détails de l'épisode pour {real_media_id}")
-        return FileResponse("fkstream/assets/uncached.mp4", media_type="video/mp4")
+        return FileResponse(_UNCACHED_VIDEO, media_type="video/mp4")
 
-    http_client = request.app.state.http_client #
-    client_ip = get_client_ip(request) #
-    stremthru_token = build_stremthru_token(config["debridService"], config["debridApiKey"]) #
+    http_client = request.app.state.http_client
+    client_ip = get_client_ip(request)
+    stremthru_token = build_stremthru_token(config["debridService"], config["debridApiKey"])
     
     debrid_instance = StremThru(
         session=http_client,
@@ -326,4 +353,4 @@ async def playback(request: Request, b64config: str, b64_media_id: str, hash_val
     else:
         # Si le lien n'est pas disponible (en cours de DL ou erreur), on affiche la vidéo d'attente
         logger.warning(f"Affichage de la vidéo d'attente pour {filename} (téléchargement en cours ou erreur).")
-        return FileResponse("fkstream/assets/uncached.mp4", media_type="video/mp4", status_code=200)
+        return FileResponse(_UNCACHED_VIDEO, media_type="video/mp4", status_code=200)

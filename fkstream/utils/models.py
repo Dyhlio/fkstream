@@ -32,7 +32,7 @@ class AppSettings(BaseSettings):
     PROXY_DEBRID_STREAM_DEBRID_DEFAULT_APIKEY: Optional[str] = None
     PROXY_DEBRID_STREAM_PASSWORD: Optional[str] = None
     STREMTHRU_URL: Optional[str] = "https://stremthru.13377001.xyz"
-    LOG_LEVEL: Optional[str] = "DEBUG"
+    LOG_LEVEL: Optional[str] = "PRODUCTION"
     CUSTOM_SOURCE_URL: Optional[str] = None
     CUSTOM_SOURCE_PATH: Optional[str] = "data/custom_sources.json"
     CUSTOM_SOURCE_INTERVAL: Optional[int] = 3600

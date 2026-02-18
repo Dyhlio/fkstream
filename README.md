@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/Dyhlio/fkstream/refs/heads/main/fkstream/assets/fkstream-logo.jpg" alt="FKStream Logo" width="150">
   <h1>FKStream</h1>
-  <p><strong>Addon Stremio non officiel pour accéder au contenu de Fankai.</strong></p>
+  <p><strong>Addon Stremio & Kodi non officiel pour accéder au contenu de Fankai.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/status-fonctionnel-success?style=for-the-badge" alt="Status">
     <img src="https://img.shields.io/badge/python-3.11+-blue?style=for-the-badge&logo=python" alt="Python Version">
@@ -12,9 +12,9 @@
 
 ## 🌟 À propos
 
-**FKStream** est un addon non officiel pour Stremio, conçu pour accéder au contenu proposé par Fankai. Il permet de parcourir une large bibliothèque d’animes, avec une prise en charge avancée des services de débridage pour un streaming fluide et optimisé.
+**FKStream** est un addon non officiel pour Stremio et Kodi, conçu pour accéder au contenu proposé par Fankai. Il permet de parcourir une large bibliothèque d'animes, avec une prise en charge avancée des services de débridage pour un streaming fluide et optimisé.
 
-> **Hébergé par Fankai** : Une instance est disponible à l'adresse https://streamio.fankai.fr/configure
+> **Addon Kodi** : Pour l'installation et l'utilisation sur Kodi, consultez le [README dédié](kodi/README.md).
 
 ## 🚨 Note importante sur les versions
 
@@ -35,7 +35,7 @@ Les développeurs de **FKStream** n'encouragent pas et ne sont pas responsables 
 - **Catalogue Fankai Complet** : Accès à l'ensemble des animes disponibles sur Fankai.
 - **Sources Personnalisées** : Possibilité d'ajouter des sources externes via CUSTOM_SOURCE_URL.
 - **Intégration Debrid** : Supporte de nombreux services de débridage (Real-Debrid, AllDebrid, Premiumize, etc.) pour un streaming haute vitesse.
-- **Mode Torrent Direct** : Possibilité d'envoyer les torrents directement à Stremio sans passer par un service debrid.
+- **Mode Torrent Direct** : Possibilité d'envoyer les torrents directement à Stremio ou Kodi (via Elementum) sans passer par un service debrid.
 - **Mise en Cache Intelligente** : Cache les métadonnées et la disponibilité des liens pour des chargements plus rapides.
 - **Matching Précis** : Algorithme avancé pour trouver le bon fichier vidéo correspondant à un épisode, même dans des packs contenant toute une saison.
 - **Interface de Configuration Web** : Une page de configuration simple et claire pour paramétrer l'addon facilement.
@@ -122,7 +122,7 @@ Sur cette page, vous pourrez :
 - Entrer votre clé API.
 - Sélectionner d'autres options comme le filtrage des flux.
 
-Une fois la configuration terminée, cliquez sur **"Installer sur Stremio"**.
+Une fois la configuration terminée, cliquez sur **"Installer sur Stremio"** ou utilisez la section **Kodi** pour associer votre addon via un code d'appairage.
 
 ## 🔧 Variables d'environnement
 
@@ -131,7 +131,7 @@ Toutes les configurations avancées se font via le fichier `.env`.
 | Variable                                     | Description                                                                          | Défaut                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------ |
 | `ADDON_ID`                                   | (Optionnel) Identifiant unique de l'addon.                                           | `community.fkstream`                 |
-| `ADDON_NAME`                                 | (Optionnel) Nom de l'addon affiché dans Stremio.                                     | `FKStream`                           |
+| `ADDON_NAME`                                 | (Optionnel) Nom de l'addon affiché dans Stremio et Kodi.                             | `FKStream`                           |
 | `FASTAPI_HOST`                               | (Optionnel) L'adresse sur laquelle le serveur écoute.                                | `0.0.0.0`                            |
 | `FASTAPI_PORT`                               | (Optionnel) Le port sur lequel le serveur écoute.                                    | `8000`                               |
 | `FASTAPI_WORKERS`                            | (Optionnel) Nombre de processus. Mettre à -1 pour un calcul automatique.             | `1`                                  |
@@ -152,7 +152,7 @@ Toutes les configurations avancées se font via le fichier `.env`.
 | `STREMTHRU_URL`                              | (Optionnel) URL du service StremThru.                                                | `https://stremthru.13377001.xyz`     |
 | `FANKAI_URL`                                 | **(OBLIGATOIRE)** URL de l'API Fankai - Voir section Configuration requise           | ` ` (vide)                           |
 | `API_KEY`                                    | **(OBLIGATOIRE)** Clé API pour accéder au contenu - Voir section Configuration requise | ` ` (vide)                           |
-| `LOG_LEVEL`                                  | (Optionnel) Niveau de log. Options : `DEBUG`, `PRODUCTION`.                          | `DEBUG`                              |
+| `LOG_LEVEL`                                  | (Optionnel) Niveau de log. Options : `DEBUG`, `PRODUCTION`.                          | `PRODUCTION`                         |
 | `CUSTOM_SOURCE_URL`                          | (Optionnel) URL du fichier JSON contenant les sources personnalisées.                | ` ` (vide)                           |
 | `CUSTOM_SOURCE_PATH`                         | (Optionnel) Chemin du fichier JSON pour les sources personnalisées.                  | `data/custom_sources.json`           |
 | `CUSTOM_SOURCE_INTERVAL`                     | (Optionnel) Intervalle de mise à jour en secondes.                                   | `3600` (1 heure)                     |
