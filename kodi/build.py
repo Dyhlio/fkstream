@@ -18,7 +18,11 @@ BUILD_DIR = KODI_DIR / "build"
 
 ADDON_ID = "plugin.video.fkstream"
 REPO_ID = "repository.fkstream"
-ASSETS_DIR = KODI_DIR / ADDON_ID / "resources"
+ASSETS_DIR = KODI_DIR.parent / "fkstream" / "assets"
+ASSETS_MAP = {
+    "fkstream-logo.jpg": "icon.jpg",
+    "fkstream-background.jpg": "fanart.jpg",
+}
 
 def get_version(addon_dir: Path) -> str:
     """Extrait la version depuis addon.xml."""
@@ -48,14 +52,16 @@ def build_zip(addon_id: str, version: str, is_addon: bool = False):
     # Copier addon.xml dans dist/ (pour generate_repository.py)
     shutil.copy2(src_dir / "addon.xml", dist_addon_dir / "addon.xml")
 
-    # Copier les assets (icon/fanart) dans dist/ pour le repository
-    icon_src = ASSETS_DIR / "icon.jpg"
-    fanart_src = ASSETS_DIR / "fanart.jpg"
-
-    if icon_src.exists():
-        shutil.copy2(icon_src, dist_addon_dir / "icon.jpg")
-    if fanart_src.exists():
-        shutil.copy2(fanart_src, dist_addon_dir / "fanart.jpg")
+    # Copier les assets (icon/fanart) depuis fkstream/assets/ vers build/ (ZIP) et dist/ (repo index)
+    # Pour le plugin, les assets vont dans resources/ ; pour le repo, à la racine
+    assets_subdir = "resources" if is_addon else ""
+    for src_name, dst_name in ASSETS_MAP.items():
+        src_path = ASSETS_DIR / src_name
+        if src_path.exists():
+            for target_dir in [build_addon_dir, dist_addon_dir]:
+                dst_dir = target_dir / assets_subdir if assets_subdir else target_dir
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dst_dir / dst_name)
 
     # Créer le zip
     zip_name = f"{addon_id}-{version}.zip"

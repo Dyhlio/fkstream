@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="repository.fkstream" version="1.0.0" name="FKStream Repository" provider-name="FKStream">
+<addon id="repository.fkstream" version="1.0.1" name="FKStream Repository" provider-name="FKStream">
     <extension point="xbmc.addon.repository" name="FKStream Repository">
         <dir>
             <info compressed="false">https://dyhlio.github.io/fkstream/addons.xml</info>
             <checksum>https://dyhlio.github.io/fkstream/addons.xml.md5</checksum>
             <datadir zip="true">https://dyhlio.github.io/fkstream/</datadir>
+            <hashes>false</hashes>
         </dir>
     </extension>
     <extension point="xbmc.addon.metadata">
