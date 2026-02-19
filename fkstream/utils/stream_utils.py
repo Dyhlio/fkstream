@@ -4,10 +4,7 @@ import unicodedata
 from fkstream.utils.common_logger import logger
 from fkstream.utils.models import Episode
 
-# --- Fonctions utilitaires de base ---
-
 def bytes_to_size(bytes_val: int) -> str:
-    """Convertit les octets en une chaîne de caractères lisible (KB, MB, GB)."""
     if not isinstance(bytes_val, (int, float)) or bytes_val == 0:
         return "N/A"
     if bytes_val < 1024:
@@ -19,31 +16,22 @@ def bytes_to_size(bytes_val: int) -> str:
     else:
         return f"{bytes_val/1024**3:.2f} GB"
 
-# --- Cache module-level pour la liste de renommage ---
-
 _rename_map_cache: dict | None = None
 _rename_map_cache_time: float = 0
 _RENAME_MAP_TTL = 604800  # 7 jours
 
-# --- Logique de matching ---
-
 def _normalize_filename_for_matching(filename: str) -> str:
-    """
-    Normalise une chaîne de caractères pour une comparaison flexible.
-    """
     if not filename:
         return ''
     
     base = filename.lower()
     base = unicodedata.normalize('NFD', base).encode('ascii', 'ignore').decode('utf-8')
     
-    # Supprime les métadonnées courantes
     base = re.sub(r'\[.*?\]|\(.*?\)', '', base)
     base = re.sub(r'\b\d{3,4}p\b', '', base)
     base = re.sub(r'.(mkv|mp4|avi|nfo)(?=\s|$)', '', base, flags=re.IGNORECASE, count=0)
     base = re.sub(r'\b(multi|vo|vf|vostfr|x264|x265|hevc|bdrip|webrip|dvdrip)\b', '', base)
     
-    # Nettoyage final
     base = re.sub(r'[.\-_|\']', ' ', base)
     
     base = re.sub(r'\b(\d+)\s*x\s*(\d+)\b', r' \2 ', base)

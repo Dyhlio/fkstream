@@ -6,7 +6,6 @@ from fkstream.utils.database import get_custom_source_from_cache, save_custom_so
 
 
 async def scrape_videas_url(http_client, page_url: str) -> Optional[str]:
-    """Scrape une page videas pour extraire le lien direct."""
     try:
         cached_url = await get_custom_source_from_cache(page_url)
         if cached_url:

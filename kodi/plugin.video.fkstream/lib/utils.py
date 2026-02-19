@@ -29,26 +29,19 @@ except ImportError:
 
 
 def get_base_url():
-    """Retourne l'URL de base du serveur FKStream."""
     url = get_setting("base_url").strip().rstrip("/")
     return url
 
 
 def get_secret_string():
-    """Retourne la clé de configuration (b64config)."""
     return get_setting("secret_string").strip()
 
 
 def is_configured():
-    """Vérifie si l'addon est configuré (base_url + secret_string)."""
     return bool(get_base_url()) and bool(get_secret_string())
 
 
 def api_get(path, timeout=15):
-    """
-    Effectue un GET vers le serveur FKStream.
-    Retourne le JSON de la réponse ou None en cas d'erreur.
-    """
     base = get_base_url()
     if not base:
         log("Erreur: URL du serveur non configurée")
@@ -73,7 +66,6 @@ def api_get(path, timeout=15):
 
 
 def build_catalog_url(search=None, genre=None, sort=None):
-    """Construit le chemin d'URL pour le catalogue."""
     secret = get_secret_string()
     prefix = f"/{secret}" if secret else ""
     parts = []
@@ -90,14 +82,12 @@ def build_catalog_url(search=None, genre=None, sort=None):
 
 
 def build_meta_url(anime_id):
-    """Construit le chemin d'URL pour les métadonnées d'un anime."""
     secret = get_secret_string()
     prefix = f"/{secret}" if secret else ""
     return f"{prefix}/meta/anime/{anime_id}.json"
 
 
 def build_stream_url(media_id):
-    """Construit le chemin d'URL pour les streams d'un épisode."""
     secret = get_secret_string()
     if secret:
         return f"/{secret}/stream/anime/{media_id}.json?kodi=1"
@@ -105,7 +95,6 @@ def build_stream_url(media_id):
 
 
 def is_elementum_installed():
-    """Vérifie si le plugin Elementum est installé dans Kodi."""
     try:
         xbmcaddon.Addon("plugin.video.elementum")
         return True

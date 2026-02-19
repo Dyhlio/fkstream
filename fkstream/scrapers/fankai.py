@@ -9,7 +9,6 @@ from fkstream.utils.models import settings
 
 
 async def _fetch_complete_anime_data(fankai_api: "FankaiAPI", anime_id: str) -> dict:
-    """Fonction d'aide pour récupérer les données complètes d'un anime depuis l'API."""
     anime_data = await fankai_api.get_series_details(anime_id)
     if not anime_data:
         return None
@@ -28,8 +27,6 @@ async def _fetch_complete_anime_data(fankai_api: "FankaiAPI", anime_id: str) -> 
 
 
 class FankaiAPI(BaseClient):
-    """Client pour l'API metadata.fankai.fr."""
-    
     def __init__(self, client: HttpClient):
         super().__init__()
         if not settings.FANKAI_URL:
@@ -38,7 +35,6 @@ class FankaiAPI(BaseClient):
         self.client = client
 
     async def get_all_series(self) -> List[Dict[str, Any]]:
-        """Récupère la liste complète de toutes les séries."""
         try:
             logger.info("Recuperation de toutes les series depuis l'API Fankai Metadata...")
             response = await self.client.get(f"{self.base_url}/series?paginate=false")
@@ -49,7 +45,6 @@ class FankaiAPI(BaseClient):
             return []
 
     async def get_series_details(self, series_id: str) -> Optional[Dict[str, Any]]:
-        """Récupère les détails d'une série par son ID."""
         try:
             logger.info(f"Recuperation des details pour la serie ID: {series_id}")
             response = await self.client.get(f"{self.base_url}/series/{series_id}")
@@ -60,7 +55,6 @@ class FankaiAPI(BaseClient):
             return None
 
     async def get_seasons(self, series_id: str) -> List[Dict[str, Any]]:
-        """Récupère les saisons d'une série."""
         try:
             logger.info(f"Recuperation des saisons pour la serie ID: {series_id}")
             response = await self.client.get(f"{self.base_url}/series/{series_id}/seasons")
@@ -71,7 +65,6 @@ class FankaiAPI(BaseClient):
             return []
 
     async def get_episodes(self, season_id: str) -> List[Dict[str, Any]]:
-        """Récupère les épisodes d'une saison."""
         try:
             logger.info(f"Recuperation des episodes pour la saison ID: {season_id}")
             response = await self.client.get(f"{self.base_url}/seasons/{season_id}/episodes")
@@ -82,7 +75,6 @@ class FankaiAPI(BaseClient):
             return []
 
     async def get_actors(self, series_id: str) -> List[Dict[str, Any]]:
-        """Récupère les acteurs d'une série."""
         try:
             logger.info(f"Recuperation des acteurs pour la serie ID: {series_id}")
             response = await self.client.get(f"{self.base_url}/series/{series_id}/actors")

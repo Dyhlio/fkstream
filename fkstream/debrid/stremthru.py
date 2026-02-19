@@ -38,14 +38,12 @@ class StremThru:
         self.media_only_id = media_only_id
 
     def parse_store_creds(self, token: str):
-        """Analyse les informations d'identification du magasin à partir du jeton."""
         if ":" in token:
             parts = token.split(":", 1)
             return parts[0], parts[1]
         return token, ""
 
     async def check_premium(self):
-        """Vérifie si l'utilisateur a un abonnement premium."""
         cache_key = self.default_headers.get("X-StremThru-Store-Authorization", "")
         now = time.time()
         if cache_key in _premium_cache:
@@ -63,7 +61,6 @@ class StremThru:
         return False
 
     async def get_instant(self, magnets: list):
-        """Vérifie la disponibilité instantanée d'une liste de magnets."""
         try:
             url = f"{self.base_url}/magnets/check?magnet={','.join(magnets)}&client_ip={self.client_ip}&sid={self.sid}"
             magnet_req = await self.session.get(url, headers=self.default_headers)
@@ -72,10 +69,6 @@ class StremThru:
             logger.warning(f"Exception lors de la verification de la disponibilite instantanee du hash sur {self.name}: {e}")
 
     async def _process_availability_result(self, torrent: dict):
-        """
-        Traite un seul résultat de torrent de la vérification de disponibilité.
-        Renvoie simplement le statut brut pour être traité plus tard.
-        """
         status = torrent.get("status")
         if not status:
             return []
@@ -99,20 +92,17 @@ class StremThru:
         return availability
 
     async def get_availability(self, torrent_hashes: list, seeders_map: dict, tracker_map: dict, sources_map: dict):
-        """Logique principale pour obtenir la disponibilité des torrents, en utilisant le cache et l'API."""
         logger.info(f"🔍 StremThru get_availability - Recherche de {len(torrent_hashes)} torrents")
         if not await self.check_premium(): return []
 
         cached_files, unknown_hashes = [], []
-        
-        # Paralléliser les requêtes cache pour améliorer les performances
+
         cache_tasks = [
             get_debrid_from_cache(self.sid, hash, self.real_debrid_name) 
             for hash in torrent_hashes
         ]
         cache_results = await asyncio.gather(*cache_tasks, return_exceptions=True)
-        
-        # Traiter les résultats des requêtes cache parallèles
+
         for i, hash in enumerate(torrent_hashes):
             cached_status = cache_results[i]
             if cached_status and not isinstance(cached_status, Exception):
@@ -134,7 +124,6 @@ class StremThru:
             for file_list in processed_files_list:
                 if file_list: newly_processed_files.extend(file_list)
 
-            # Préparer les écritures cache en parallèle pour améliorer les performances
             cache_save_tasks = []
             for file_info in newly_processed_files:
                 hash = file_info["hash"]
@@ -145,12 +134,10 @@ class StremThru:
                         logger.info(f"⏩ Sauvegarde du cache ignoree pour media_id de type playback_filename: {self.sid}")
                         file_info["status"] = db_status
                         continue
-                    # Ajouter la tâche de sauvegarde cache à la liste
                     cache_save_tasks.append(save_debrid_to_cache(self.sid, hash, self.real_debrid_name, db_status))
                     logger.info(f"💾 ECRITURE BD: {hash} → {db_status}")
                 file_info["status"] = db_status or "unknown"
             
-            # Exécuter toutes les écritures cache en parallèle
             if cache_save_tasks:
                 await asyncio.gather(*cache_save_tasks, return_exceptions=True)
 
@@ -159,7 +146,6 @@ class StremThru:
         return final_files
 
     async def generate_download_link(self, hash: str, index: str, name: str, torrent_name: str, season: int, episode: int):
-        """Génère un lien de téléchargement pour un fichier spécifique d'un torrent."""
         try:
             logger.info(f"🎬 StremThru generate_download_link pour hash: {hash}")
             cached_result = await get_debrid_from_cache(self.sid, hash, self.real_debrid_name)
@@ -225,7 +211,6 @@ class StremThru:
             logger.warning(f"Exception lors de la recuperation du lien de telechargement pour {hash}: {e}")
 
     async def _find_target_file(self, magnet: dict, hash: str, name: str, torrent_name: str, season: int, episode: int, index: str):
-        """Trouve le bon fichier dans la liste des fichiers d'un torrent en fonction des métadonnées."""
         name = unquote(name)
         torrent_name = unquote(torrent_name)
         debrid_files = magnet.get("data", {}).get("files", [])
@@ -259,7 +244,6 @@ class StremThru:
                         target_episode_id = int(parts[2])
                         logger.info(f"⚠️ StremThru _find_target_file: Recherche de l'episode {target_episode_id} avec nfo_filename")
                         
-                        # Récupérer le nfo_filename pour cet épisode
                         nfo_filename = await self._get_nfo_filename_for_episode(parts[1], target_episode_id)
                         if not nfo_filename:
                             logger.warning(f"⚠️ StremThru: Impossible de récupérer nfo_filename pour l'episode {target_episode_id}")
@@ -274,7 +258,6 @@ class StremThru:
         return max(files_with_link, key=lambda x: x.get("size", 0))
 
     async def _get_nfo_filename_for_episode(self, anime_id: str, episode_id: int):
-        """Récupère le nfo_filename pour un épisode donné."""
         try:
             # Utiliser la même fonction que stream.py pour uniformité
             fankai_api = FankaiAPI(self.session)
@@ -291,7 +274,6 @@ class StremThru:
             return None
 
     def _extract_nfo_filename_from_metadata(self, anime_data: dict, episode_id: int):
-        """Extrait le nfo_filename depuis les métadonnées."""
         try:
             seasons = anime_data.get("seasons", [])
             for season in seasons:
@@ -305,7 +287,6 @@ class StremThru:
             return None
 
     async def _handle_magnet_status(self, hash: str, magnet: dict):
-        """Gère les différents statuts d'un lien magnet et retourne un objet magnet mis à jour ou une réponse finale."""
         status = magnet.get("data", {}).get("status")
         logger.info(f"🎬 Statut du magnet StremThru: {status} pour le hash {hash}")
 
@@ -356,7 +337,6 @@ class StremThru:
         return magnet, status
 
     async def _get_magnet_status(self, hash: str):
-        """Obtient le statut initial d'un lien magnet auprès de StremThru."""
         magnet_link = get_magnet_link(hash) or f"magnet:?xt=urn:btih:{hash}"
         if get_magnet_link(hash):
             logger.info(f"✅ Utilisation du lien magnet avec {magnet_link.count('&tr=')} traqueurs reels pour le hash {hash}")

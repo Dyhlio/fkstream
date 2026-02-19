@@ -5,9 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
-    """
-    Paramètres de l'application, chargés à partir des variables d'environnement.
-    """
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     ADDON_ID: Optional[str] = "community.fkstream"
@@ -60,9 +57,6 @@ DEBRID_SERVICES = [
 
 
 class ConfigModel(BaseModel):
-    """
-    Modèle pour la configuration utilisateur fournie via l'URL.
-    """
     streamFilter: Optional[str] = "all"
     debridService: Optional[str] = "torrent"
     debridApiKey: Optional[str] = ""
@@ -121,7 +115,6 @@ database = Database(f"{'sqlite' if settings.DATABASE_TYPE == 'sqlite' else 'post
 
 
 class Episode(BaseModel):
-    """Modèle de données pour un épisode."""
     id: str
     name: str
     number: Optional[int] = None
@@ -134,7 +127,6 @@ class Episode(BaseModel):
 
 
 class Anime(BaseModel):
-    """Modèle de données pour un anime, incluant une liste d'épisodes."""
     id: str
     name: str
     poster: Optional[str] = None

@@ -11,11 +11,9 @@ VIDEO_EXTENSIONS = (
 
 
 def b64_encode(s: str) -> str:
-    """Encode une chaîne en base64 URL-safe."""
     return base64.urlsafe_b64encode(s.encode()).decode()
 
 def b64_decode(s: str) -> str:
-    """Décode une chaîne base64 URL-safe."""
     try:
         if not s or not isinstance(s, str):
             raise ValueError("Entree invalide")
@@ -25,11 +23,9 @@ def b64_decode(s: str) -> str:
 
 
 def get_client_ip(request: Request) -> str:
-    """Récupère l'adresse IP du client à partir de la requête."""
     return request.headers.get("cf-connecting-ip", request.client.host)
 
 def is_video(title: str) -> bool:
-    """Vérifie si un fichier est un fichier vidéo en fonction de son extension."""
     return title.lower().endswith(VIDEO_EXTENSIONS)
 
 

@@ -6,10 +6,6 @@ from .common_logger import logger
 
 
 def validate_config(b64config: str) -> dict:
-    """
-    Valide et traite la configuration encodée en base64.
-    Centralise la logique des deux modules API.
-    """
     try:
         config = orjson.loads(b64_decode(b64config))
 
@@ -37,5 +33,4 @@ def validate_config(b64config: str) -> dict:
 
 
 def config_check(b64config: str):
-    """Wrapper pour la validation de configuration."""
     return validate_config(b64config)
