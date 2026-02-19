@@ -28,7 +28,6 @@ class Router:
         self.params = dict(parse_qsl(argv[2].lstrip("?")))
 
     def run(self):
-        """Point d'entrée principal du routeur."""
         action = self.params.get("action")
 
         if action is None:
@@ -49,19 +48,15 @@ class Router:
             log(f"Action inconnue: {action}")
 
     def _build_url(self, **kwargs):
-        """Construit une URL de plugin Kodi avec les paramètres donnés."""
         return f"{self.addon_url}?{urlencode(kwargs)}"
 
     def list_root(self):
-        """Affiche le menu principal."""
         items = []
 
-        # Parcourir le catalogue
         li = xbmcgui.ListItem("Animes")
         li.setArt({"icon": "DefaultVideoPlaylists.png"})
         items.append((self._build_url(action="browse"), li, True))
 
-        # Rechercher
         li = xbmcgui.ListItem("Rechercher")
         li.setArt({"icon": "DefaultAddonsSearch.png"})
         items.append((self._build_url(action="search"), li, True))
@@ -70,7 +65,6 @@ class Router:
         xbmcplugin.endOfDirectory(self.handle)
 
     def list_animes(self):
-        """Affiche la liste des animes depuis le catalogue FKStream."""
         if not is_configured():
             xbmcgui.Dialog().ok(
                 get_addon_name(),
@@ -130,6 +124,9 @@ class Router:
                     info_tag.setYear(int(year))
                 except (ValueError, TypeError):
                     pass
+            status = anime.get("runtime", "")
+            if status:
+                info_tag.setTvShowStatus(status)
             info_tag.setMediaType("tvshow")
 
             url = self._build_url(action="seasons", id=anime_id)
@@ -140,7 +137,6 @@ class Router:
         xbmcplugin.endOfDirectory(self.handle)
 
     def search_animes(self):
-        """Affiche un clavier de recherche puis les résultats."""
         keyboard = xbmc.Keyboard("", "Rechercher un anime")
         keyboard.doModal()
 
@@ -151,12 +147,10 @@ class Router:
         if not query:
             return
 
-        # Réutiliser list_animes avec le paramètre search
         self.params["search"] = query
         self.list_animes()
 
     def list_seasons(self, anime_id):
-        """Affiche les saisons d'un anime."""
         if not is_configured():
             return
 
@@ -181,8 +175,8 @@ class Router:
         genres = meta.get("genres", [])
         rating = meta.get("imdbRating", "")
         year = meta.get("releaseInfo", "")
+        status = meta.get("runtime", "")
 
-        # Extraire les saisons uniques
         seasons = {}
         for video in videos:
             season_num = video.get("season")
@@ -191,6 +185,9 @@ class Router:
             if season_num is not None:
                 seasons[season_num].append(video)
 
+        # Images et métadonnées par saison (fourni par l'API, ignoré par Stremio)
+        season_images = meta.get("seasonImages", {})
+
         xbmcplugin.setPluginCategory(self.handle, anime_title)
 
         items = []
@@ -198,16 +195,21 @@ class Router:
             episode_count = len(seasons[season_num])
             label = f"Saison {season_num} ({episode_count} épisodes)"
 
+            si = season_images.get(str(season_num), {})
+            season_poster = si.get("poster", poster)
+            season_fanart = si.get("fanart", background)
+            season_overview = si.get("overview", description)
+
             li = xbmcgui.ListItem(label)
             li.setArt({
-                "poster": poster,
-                "thumb": poster,
-                "fanart": background,
+                "poster": season_poster,
+                "thumb": season_poster,
+                "fanart": season_fanart,
             })
 
             info_tag = li.getVideoInfoTag()
             info_tag.setTitle(anime_title)
-            info_tag.setPlot(description)
+            info_tag.setPlot(season_overview)
             info_tag.setSeason(season_num)
             if genres:
                 info_tag.setGenres(genres)
@@ -221,6 +223,8 @@ class Router:
                     info_tag.setYear(int(year))
                 except (ValueError, TypeError):
                     pass
+            if status:
+                info_tag.setTvShowStatus(status)
             info_tag.setMediaType("season")
 
             url = self._build_url(action="episodes", id=anime_id, season=season_num)
@@ -231,7 +235,6 @@ class Router:
         xbmcplugin.endOfDirectory(self.handle)
 
     def list_episodes(self, anime_id, season_number):
-        """Affiche les épisodes d'une saison."""
         if not is_configured():
             return
 
@@ -248,9 +251,12 @@ class Router:
         poster = meta.get("poster", "")
         background = meta.get("background", "")
 
+        si = meta.get("seasonImages", {}).get(str(season_number), {})
+        season_fanart = si.get("fanart", background)
+        season_poster = si.get("poster", poster)
+
         xbmcplugin.setPluginCategory(self.handle, f"{anime_title} / Saison {season_number}")
 
-        # Filtrer les épisodes de la saison demandée
         episodes = [v for v in videos if v.get("season") == season_number]
         episodes.sort(key=lambda x: x.get("episode", 0))
 
@@ -265,10 +271,11 @@ class Router:
             label = f"E{ep_num:02d} — {ep_title}"
 
             li = xbmcgui.ListItem(label)
+            ep_image = thumbnail or season_poster
             li.setArt({
-                "poster": poster,
-                "thumb": thumbnail or poster,
-                "fanart": background,
+                "poster": ep_image,
+                "thumb": ep_image,
+                "fanart": season_fanart,
             })
 
             info_tag = li.getVideoInfoTag()
@@ -286,15 +293,14 @@ class Router:
         xbmcplugin.endOfDirectory(self.handle)
 
     def list_streams(self, media_id):
-        """Affiche les streams disponibles pour un épisode."""
         if not is_configured():
             return
 
-        # Récupérer les métadonnées de l'anime/épisode pour l'affichage
         ep_plot = ""
         ep_poster = ""
         ep_fanart = ""
         ep_title = ""
+        ep_thumbnail = ""
         ep_season = 0
         ep_number = 0
         anime_title = ""
@@ -314,9 +320,15 @@ class Router:
                         ep_title = video.get("title", "")
                         ep_season = video.get("season", 0)
                         ep_number = video.get("episode", 0)
+                        ep_thumbnail = video.get("thumbnail", "")
                         break
                 if not ep_plot:
                     ep_plot = meta.get("description", "")
+
+                if ep_season:
+                    si = meta.get("seasonImages", {}).get(str(ep_season), {})
+                    ep_poster = si.get("poster", ep_poster)
+                    ep_fanart = si.get("fanart", ep_fanart)
 
         if ep_season and ep_number:
             category = f"{anime_title} / S{ep_season:02d}E{ep_number:02d}" if anime_title else f"S{ep_season:02d}E{ep_number:02d}"
@@ -357,7 +369,6 @@ class Router:
             filename = behavior.get("filename", stream_desc)
             video_size = behavior.get("videoSize", 0)
 
-            # Construire le label
             size_str = ""
             if video_size and video_size > 0:
                 size_mb = video_size / (1024 * 1024)
@@ -370,9 +381,10 @@ class Router:
 
             li = xbmcgui.ListItem(label)
             li.setProperty("IsPlayable", "true")
+            stream_image = ep_thumbnail or ep_poster
             li.setArt({
-                "poster": ep_poster,
-                "thumb": ep_poster,
+                "poster": stream_image,
+                "thumb": stream_image,
                 "fanart": ep_fanart,
             })
 
@@ -416,7 +428,6 @@ class Router:
         xbmcplugin.endOfDirectory(self.handle)
 
     def play_stream(self):
-        """Lance la lecture d'un stream."""
         stream_type = self.params.get("type")
 
         if stream_type == "url":

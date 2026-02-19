@@ -39,7 +39,6 @@ def extract_trackers_from_magnet(magnet_uri: str) -> list:
 
 
 def _parse_media_id(media_id: str):
-    """Analyse et valide le format du media_id."""
     if "fk:" not in media_id:
         return None, None
     try:
@@ -55,7 +54,6 @@ def _parse_media_id(media_id: str):
         return None, None
 
 async def _fetch_anime_and_episode_data(fankai_api: FankaiAPI, anime_id: str, episode_id: str, media_id: str):
-    """Récupère les données de l'anime et trouve l'épisode sélectionné."""
     anime_data = await get_or_fetch_anime_details(fankai_api, anime_id)
     if not anime_data:
         return None, None
@@ -95,7 +93,6 @@ async def _fetch_anime_and_episode_data(fankai_api: FankaiAPI, anime_id: str, ep
     return anime_info, selected_episode
 
 def _create_stream_item(request: Request, b64config: str, debrid_service: str, debrid_emoji: str, torrent: dict, media_id: str, trackers: list = None, kodi: bool = False):
-    """Crée un dictionnaire représentant un flux (stream)."""
     file_title = torrent['title']
     hash_val = torrent['infoHash']
     display_title = file_title.split('/')[-1]
@@ -234,7 +231,6 @@ async def stream(request: Request, media_type: str, media_id: str, b64config: st
                     'seeders': source.get('seeders')
                 }
                 
-                # Parce que les emojis, c'est cool
                 if debrid_service == "torrent":
                     debrid_emoji = "🧲"
                 else:

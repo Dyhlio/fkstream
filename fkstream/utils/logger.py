@@ -4,10 +4,6 @@ import os
 from loguru import logger
 from .models import settings
 def setupLogger():
-    """
-    Configure le logger Loguru avec des niveaux personnalisés, des formats et des couleurs.
-    Le niveau de log est déterminé par la variable d'environnement LOG_LEVEL ou par défaut.
-    """
     log_level = os.getenv("LOG_LEVEL")
     
     if not log_level:

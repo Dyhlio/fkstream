@@ -1,11 +1,3 @@
-"""
-Script de build pour le repository Kodi FKStream.
-Equivalent Python du Makefile de Comet, compatible Windows/Linux/Mac.
-
-Usage:
-    python build.py
-"""
-
 import os
 import shutil
 import zipfile
@@ -25,26 +17,21 @@ ASSETS_MAP = {
 }
 
 def get_version(addon_dir: Path) -> str:
-    """Extrait la version depuis addon.xml."""
     xml_path = addon_dir / "addon.xml"
     tree = ET.parse(xml_path)
     return tree.getroot().attrib["version"]
 
 
 def build_zip(addon_id: str, version: str, is_addon: bool = False):
-    """Construit le zip d'un addon et copie les fichiers nécessaires dans dist/."""
     src_dir = KODI_DIR / addon_id
     build_addon_dir = BUILD_DIR / addon_id
     dist_addon_dir = DIST_DIR / addon_id
 
-    # Préparer les dossiers
     build_addon_dir.mkdir(parents=True, exist_ok=True)
     dist_addon_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copier les sources dans build/
     shutil.copytree(src_dir, build_addon_dir, dirs_exist_ok=True)
 
-    # Supprimer __pycache__ pour les addons
     if is_addon:
         for cache_dir in build_addon_dir.rglob("__pycache__"):
             shutil.rmtree(cache_dir)
@@ -63,7 +50,6 @@ def build_zip(addon_id: str, version: str, is_addon: bool = False):
                 dst_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_path, dst_dir / dst_name)
 
-    # Créer le zip
     zip_name = f"{addon_id}-{version}.zip"
     zip_path = dist_addon_dir / zip_name
 
@@ -81,7 +67,6 @@ def build_zip(addon_id: str, version: str, is_addon: bool = False):
 
 
 def generate_index_html(addon_version: str, repo_version: str):
-    """Génère la page HTML de téléchargement."""
     template_path = KODI_DIR / "index.html.template"
     if not template_path.exists():
         print("  Skipping index.html (no template found)")
@@ -98,32 +83,26 @@ def generate_index_html(addon_version: str, repo_version: str):
 
 
 def main():
-    # Nettoyer
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
     if DIST_DIR.exists():
         shutil.rmtree(DIST_DIR)
     DIST_DIR.mkdir(parents=True)
 
-    # Versions
     addon_version = get_version(KODI_DIR / ADDON_ID)
     repo_version = get_version(KODI_DIR / REPO_ID)
 
     print(f"Building FKStream Kodi Repository (Plugin v{addon_version} / Repo v{repo_version})...")
 
-    # Build les zips
     build_zip(ADDON_ID, addon_version, is_addon=True)
     build_zip(REPO_ID, repo_version)
 
-    # Générer addons.xml + addons.xml.md5
     print("  Generating repository index...")
     import generate_repository
     generate_repository.main()
 
-    # Générer index.html
     generate_index_html(addon_version, repo_version)
 
-    # Nettoyer build/
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
 

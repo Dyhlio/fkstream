@@ -15,7 +15,6 @@ stremio_router = APIRouter(tags=["Stremio"])
 
 
 def _translate_status(status: str) -> str:
-    """Traduit le statut de l'anime en français."""
     status_translations = {
         "Continuing": "En cours",
         "Ended": "Terminé",
@@ -28,9 +27,6 @@ def _translate_status(status: str) -> str:
 
 
 def _build_genre_links(request: Request, b64config: str, genres: list) -> list:
-    """
-    Construit les liens de genre pour Stremio.
-    """
     if not genres:
         return []
     genre_links = []
@@ -53,14 +49,12 @@ def _build_genre_links(request: Request, b64config: str, genres: list) -> list:
 
 
 def _parse_genres(genres_raw: str) -> list:
-    """Parse une chaîne de genres séparés par des virgules."""
     if not genres_raw:
         return []
     return [g.strip() for g in genres_raw.split(',') if g.strip()]
 
 
 def _build_imdb_links(data: dict) -> list:
-    """Construit les liens IMDB pour un anime."""
     if not data.get('imdb_id'):
         return []
     rating_display = str(data.get('rating_value')) if data.get('rating_value') else "N/A"
@@ -72,7 +66,6 @@ def _build_imdb_links(data: dict) -> list:
 
 
 def _extract_youtube_trailer(trailer_url: str, anime_id) -> list | None:
-    """Extrait les informations de trailer YouTube et retourne une liste de trailers ou None."""
     if not trailer_url:
         logger.debug(f"TRAILER - Pas de 'trailer_url' trouve pour l'anime {anime_id}.")
         return None
@@ -106,7 +99,7 @@ async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAP
         "id": settings.ADDON_ID,
         "name": settings.ADDON_NAME,
         "description": "FKStream – Addon non officiel pour accéder au contenu de Fankai",
-        "version": "1.5.0",
+        "version": "1.6.0",
         "catalogs": [
             {
                 "type": "anime",
@@ -162,11 +155,6 @@ async def manifest(request: Request, b64config: str = None, fankai_api: FankaiAP
 
 
 async def extract_unique_genres(fankai_api: FankaiAPI) -> list[str]:
-    """
-    Extrait tous les genres uniques a partir des donnees d'anime de l'API Fankai.
-    Utilise le meme cache que la liste d'animes pour la coherence.
-    Retourne une liste triee de genres uniques.
-    """
     animes_data = await get_metadata_from_cache("fk:list")
 
     if not animes_data:
@@ -316,7 +304,6 @@ async def fankai_catalog(request: Request, b64config: str = None, search: str = 
 
 
 def _validate_anime_id(anime_id: str) -> bool:
-    """Valide un ID d'anime en s'assurant qu'il est numerique et dans une plage realiste."""
     if not anime_id.isdigit():
         return False
     try:
@@ -348,7 +335,6 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
 
     logger.debug(f"ANIME_DATA KEYS - Cles disponibles pour l'anime {anime_id}: {list(anime_data.keys())}")
 
-    # Structure de meta (plus conforme)
     meta = {
         "id": f"fk:{anime_data.get('id')}",
         "type": "anime",
@@ -373,7 +359,6 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
     if trailers:
         meta['trailers'] = trailers
 
-    # Ajout des episodes
     seasons = anime_data.get("seasons", [])
     for season_idx, season in enumerate(seasons):
         season_number = season.get('season_number', season.get('number', season_idx + 1))
@@ -394,7 +379,22 @@ async def fankai_meta(request: Request, id: str, b64config: str = None, fankai_a
 
     meta['videos'] = videos
 
-    # Ajout des liens
+    # Ajout des métadonnées par saison (images, description) — ignoré par Stremio, utilisé par Kodi
+    season_images = {}
+    for season_idx, season in enumerate(seasons):
+        season_number = str(season.get('season_number', season.get('number', season_idx + 1)))
+        entry = {}
+        if season.get('poster_image'):
+            entry['poster'] = season['poster_image']
+        if season.get('fanart_image'):
+            entry['fanart'] = season['fanart_image']
+        if season.get('plot'):
+            entry['overview'] = season['plot']
+        if entry:
+            season_images[season_number] = entry
+    if season_images:
+        meta['seasonImages'] = season_images
+
     genres = _parse_genres(anime_data.get('genres', ''))
     meta['genres'] = genres
 

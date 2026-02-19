@@ -89,7 +89,6 @@ async def setup_database():
 
 
 async def cleanup_expired_locks():
-    """Tâche de nettoyage périodique pour les verrous expirés."""
     while True:
         try:
             current_time = int(time.time())
@@ -100,7 +99,6 @@ async def cleanup_expired_locks():
 
 
 async def get_metadata_from_cache(media_id: str):
-    """Récupère les métadonnées depuis le cache."""
     current_time = time.time()
     query = "SELECT media_data FROM metadata WHERE media_id = :media_id AND expires_at > :current_time"
     result = await database.fetch_one(query, {"media_id": media_id, "current_time": current_time})
@@ -113,7 +111,6 @@ async def get_metadata_from_cache(media_id: str):
 
 
 async def set_metadata_to_cache(media_id: str, data, ttl: int = None):
-    """Stocke les métadonnées dans le cache."""
     current_time = time.time()
     expires_at = current_time + (ttl if ttl is not None else settings.METADATA_TTL)
     if settings.DATABASE_TYPE == "sqlite":
@@ -125,7 +122,6 @@ async def set_metadata_to_cache(media_id: str, data, ttl: int = None):
 
 
 async def get_debrid_from_cache(media_id: str, hash: str, debrid_service: str):
-    """Récupère le statut de disponibilité debrid depuis le cache."""
     current_time = time.time()
     query = "SELECT status FROM debrid_availability WHERE media_id = :media_id AND hash = :hash AND debrid_service = :debrid_service AND (expires_at IS NULL OR expires_at > :current_time)"
     values = {"media_id": media_id, "hash": hash, "debrid_service": debrid_service, "current_time": current_time}
@@ -134,7 +130,6 @@ async def get_debrid_from_cache(media_id: str, hash: str, debrid_service: str):
 
 
 async def save_debrid_to_cache(media_id: str, hash: str, debrid_service: str, status: str):
-    """Sauvegarde le statut de disponibilité debrid dans le cache."""
     current_time = time.time()
     expires_at = current_time + settings.DEBRID_AVAILABILITY_TTL
     if settings.DATABASE_TYPE == "sqlite":
@@ -146,7 +141,6 @@ async def save_debrid_to_cache(media_id: str, hash: str, debrid_service: str, st
 
 
 async def get_custom_source_from_cache(page_url: str):
-    """Récupère l'URL directe depuis le cache."""
     current_time = time.time()
     query = "SELECT direct_url FROM custom_source WHERE page_url = :page_url AND expires_at > :current_time"
     values = {"page_url": page_url, "current_time": current_time}
@@ -155,7 +149,6 @@ async def get_custom_source_from_cache(page_url: str):
 
 
 async def save_custom_source_to_cache(page_url: str, direct_url: str):
-    """Sauvegarde l'URL directe dans le cache."""
     current_time = time.time()
     expires_at = current_time + settings.CUSTOM_SOURCE_TTL
     if settings.DATABASE_TYPE == "sqlite":
@@ -205,10 +198,6 @@ async def acquire_lock(lock_key: str, instance_id: str, duration: int = None) ->
 
 
 async def release_lock(lock_key: str, instance_id: str) -> bool:
-    """
-    Libère un verrou distribué pour la clé donnée.
-    Retourne True si le verrou est libéré, False s'il n'appartient pas à cette instance.
-    """
     try:
         await database.execute("DELETE FROM scrape_lock WHERE lock_key = :lock_key AND instance_id = :instance_id", {"lock_key": lock_key, "instance_id": instance_id})
         logger.log("LOCK", f"🔓 Verrou libere: {lock_key}")
@@ -219,7 +208,6 @@ async def release_lock(lock_key: str, instance_id: str) -> bool:
 
 
 class DistributedLock:
-    """Gestionnaire de contexte pour le verrouillage distribué."""
     def __init__(self, lock_key: str, instance_id: str = None, duration: int = None):
         self.lock_key = lock_key
         self.instance_id = instance_id or f"fkstream_{uuid.uuid4().hex[:12]}"
@@ -247,12 +235,10 @@ class DistributedLock:
 
 
 class LockAcquisitionError(Exception):
-    """Levée lorsqu'un verrou ne peut pas être acquis."""
     pass
 
 
 async def create_kodi_setup_code(code: str, nonce: str, created_at: float, expires_at: float) -> bool:
-    """Crée un code d'appairage Kodi. Retourne True si l'insertion a réussi."""
     try:
         if settings.DATABASE_TYPE == "sqlite":
             await database.execute(
@@ -276,7 +262,6 @@ async def create_kodi_setup_code(code: str, nonce: str, created_at: float, expir
 
 
 async def associate_kodi_manifest(code: str, b64config: str) -> bool:
-    """Associe une configuration à un code Kodi. Retourne True si l'association a réussi."""
     try:
         current_time = time.time()
         await database.execute(
@@ -321,7 +306,6 @@ async def get_kodi_manifest(code: str):
 
 
 async def cleanup_expired_kodi_codes():
-    """Tâche de nettoyage périodique pour les codes Kodi expirés ou consommés."""
     while True:
         try:
             current_time = time.time()
@@ -335,7 +319,6 @@ async def cleanup_expired_kodi_codes():
 
 
 async def teardown_database():
-    """Ferme la connexion à la base de données."""
     try:
         await database.disconnect()
     except Exception as e:

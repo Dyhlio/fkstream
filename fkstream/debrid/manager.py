@@ -23,16 +23,10 @@ debrid_services = {
 }
 
 def get_debrid_extension(debrid_service: str):
-    """
-    Retourne l'extension (abréviation) pour un service debrid donné.
-    """
     if debrid_service not in debrid_services:
         raise ValueError(f"Service debrid inconnu: {debrid_service}")
     return debrid_services[debrid_service]["extension"]
 
 
 def build_stremthru_token(debrid_service: str, debrid_api_key: str):
-    """
-    Construit le jeton d'authentification pour StremThru.
-    """
     return f"{debrid_service}:{debrid_api_key}"

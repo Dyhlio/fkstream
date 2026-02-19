@@ -34,9 +34,6 @@ from fkstream.utils.custom_sources import (
 
 
 class LoguruMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware pour enregistrer les requêtes HTTP avec Loguru.
-    """
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         response = None
@@ -66,7 +63,6 @@ async def lifespan(app: FastAPI):
     await setup_database()
     
     try:
-        # Validation des URLs requises
         if not settings.FANKAI_URL:
             logger.error("ERREUR : FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
             raise RuntimeError("FANKAI_URL est obligatoire. Consultez le README pour plus d'informations.")
@@ -75,11 +71,9 @@ async def lifespan(app: FastAPI):
             logger.error("ERREUR : API_KEY est obligatoire. Consultez le README pour plus d'informations.")
             raise RuntimeError("API_KEY est obligatoire. Consultez le README pour plus d'informations.")
         
-        # Initialisation du client HTTP
         app.state.http_client = HttpClient()
         logger.info("Client HTTP initialisé avec succès")
 
-        # Récupération du dataset depuis l'API avec API_KEY
         try:
             response = await app.state.http_client.get(
                 f"{settings.FANKAI_URL}/dataset",
@@ -93,7 +87,6 @@ async def lifespan(app: FastAPI):
             app.state.dataset = {"top": []}
             raise RuntimeError(f"Échec du chargement du dataset: {e}")
 
-        # Chargement des custom sources
         if settings.CUSTOM_SOURCE_URL:
             app.state.custom_sources = await download_custom_sources(app.state.http_client)
         else:
@@ -104,13 +97,8 @@ async def lifespan(app: FastAPI):
         logger.error(f"Échec de l'initialisation : {e}")
         raise RuntimeError(f"L'initialisation a échoué : {e}")
 
-    # Tâche de nettoyage pour les verrous expirés
     cleanup_task = asyncio.create_task(cleanup_expired_locks())
-
-    # Tâche de nettoyage pour les codes Kodi expirés
     kodi_cleanup_task = asyncio.create_task(cleanup_expired_kodi_codes())
-
-    # Tâche de mise à jour périodique des custom sources
     custom_source_task = None
     if settings.CUSTOM_SOURCE_URL:
         custom_source_task = asyncio.create_task(
@@ -120,7 +108,6 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        # Nettoyage à l'arrêt de l'application
         cleanup_task.cancel()
         kodi_cleanup_task.cancel()
         if custom_source_task:
@@ -224,7 +211,6 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 
 def start_log():
-    """Affiche les logs de configuration au démarrage."""
     logger.log(
         "FKSTREAM",
         f"Serveur demarre sur http://{settings.FASTAPI_HOST}:{settings.FASTAPI_PORT} - {settings.FASTAPI_WORKERS} workers",
@@ -246,7 +232,6 @@ def start_log():
 
 
 def run_with_uvicorn():
-    """Exécute le serveur avec Uvicorn uniquement."""
     config = uvicorn.Config(
         app,
         host=settings.FASTAPI_HOST,
@@ -273,7 +258,6 @@ def run_with_uvicorn():
 
 
 def run_with_gunicorn():
-    """Exécute le serveur avec Gunicorn et les workers Uvicorn."""
     import gunicorn.app.base
 
     class StandaloneApplication(gunicorn.app.base.BaseApplication):
